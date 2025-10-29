@@ -1,0 +1,45 @@
+{
+  // Python
+  "python.defaultInterpreterPath": "${workspaceFolder}/venv/bin/python",
+  
+  // Formatting with Ruff
+  "editor.formatOnSave": true,
+  "editor.formatOnPaste": false,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit",
+      "source.organizeImports": "explicit"
+    }
+  },
+  
+  // Ruff configuration
+  "ruff.lint.args": [],
+  "ruff.format.args": [],
+  
+  // Mypy
+  "mypy-type-checker.args": [
+    "--config-file=pyproject.toml"
+  ],
+  
+  // Testing
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": [
+    "tests",
+    "-v",
+    "--cov=src"
+  ],
+  
+  // Editor
+  "editor.rulers": [88],
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    ".pytest_cache": true,
+    "htmlcov": true,
+    ".coverage": true,
+    "*.egg-info": true,
+    ".ruff_cache": true
+  }
+}
