@@ -1,3 +1,7 @@
 *.egg*
 *.pyc
 *.mypy
+*.cursor
+*.coverage
+*output/
+*local/
