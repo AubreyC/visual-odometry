@@ -2,8 +2,8 @@ from typing import List, Optional
 
 import numpy as np
 
-from .camera import ValidationError
 from .geometry import GeometryUtils
+from .validation_error import ValidationError
 
 
 class CameraPose:

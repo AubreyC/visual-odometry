@@ -2,17 +2,7 @@ from typing import Union
 
 import numpy as np
 
-
-class ValidationError(ValueError):
-    """Raised when input validation fails."""
-
-    pass
-
-
-class ProcessingError(RuntimeError):
-    """Raised when data processing fails."""
-
-    pass
+from .validation_error import ProcessingError, ValidationError
 
 
 class PinHoleCamera:

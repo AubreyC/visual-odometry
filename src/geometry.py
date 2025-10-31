@@ -2,7 +2,7 @@ from typing import Tuple
 
 import numpy as np
 
-from .camera import ProcessingError, ValidationError
+from .validation_error import ProcessingError, ValidationError
 
 
 class GeometryUtils:
