@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from .camera_pose import CameraPose
-from .feature_observation import FeatureTrack, SyntheticImage
+from .feature_observation import ImageObservations
 
 
 class Visualizer:
@@ -343,68 +343,8 @@ class Visualizer:
 
         return fig
 
-    def plot_feature_tracks_2d(
-        self,
-        tracks: List[FeatureTrack],
-        title: str = "Feature Tracks (2D)",
-        max_tracks: int = 20,
-    ) -> plt.Figure:
-        """Plot feature tracks in 2D image coordinates.
-
-        Args:
-            tracks (List[FeatureTrack]): List of feature tracks.
-            title (str): Plot title.
-            max_tracks (int): Maximum number of tracks to plot.
-
-        Returns:
-            plt.Figure: The matplotlib figure.
-        """
-        fig, ax = plt.subplots(figsize=self.figsize)
-
-        # Use colormap for different tracks
-        colors = plt.cm.tab10(np.linspace(0, 1, min(len(tracks), max_tracks)))
-
-        for i, track in enumerate(tracks[:max_tracks]):
-            coords = track.get_image_coordinates()
-            if len(coords) > 1:
-                ax.plot(
-                    coords[:, 0],
-                    coords[:, 1],
-                    color=colors[i],
-                    linewidth=2,
-                    alpha=0.8,
-                    label=f"Landmark {track.landmark_id}",
-                )
-
-                # Mark start and end points
-                ax.scatter(
-                    coords[0, 0],
-                    coords[0, 1],
-                    color=colors[i],
-                    marker="o",
-                    s=50,
-                    alpha=0.8,
-                )
-                ax.scatter(
-                    coords[-1, 0],
-                    coords[-1, 1],
-                    color=colors[i],
-                    marker="s",
-                    s=50,
-                    alpha=0.8,
-                )
-
-        ax.set_xlabel("Image X (pixels)")
-        ax.set_ylabel("Image Y (pixels)")
-        ax.set_title(title)
-        ax.grid(True)
-        ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
-        plt.tight_layout()
-
-        return fig
-
     def plot_synthetic_image(
-        self, image: SyntheticImage, title: Optional[str] = None
+        self, image: ImageObservations, title: Optional[str] = None
     ) -> plt.Figure:
         """Plot synthetic image with feature observations.
 
@@ -424,8 +364,8 @@ class Visualizer:
         ax.imshow(blank_image, extent=[0, image.image_width, image.image_height, 0])
 
         # Plot feature observations
-        if image.observations:
-            coords = np.array([obs.image_coords for obs in image.observations])
+        if image.feature_observations:
+            coords = np.array([obs.image_coords for obs in image.feature_observations])
             ax.scatter(
                 coords[:, 0],
                 coords[:, 1],
@@ -436,7 +376,7 @@ class Visualizer:
             )
 
             # Add landmark IDs as text
-            for obs in image.observations:
+            for obs in image.feature_observations:
                 ax.annotate(
                     f"{obs.landmark_id}",
                     (obs.image_coords[0], obs.image_coords[1]),
@@ -447,7 +387,7 @@ class Visualizer:
                 )
 
         if title is None:
-            title = f"Synthetic Image - {len(image)} features"
+            title = f"Synthetic Image - {len(image.feature_observations)} features"
 
         ax.set_title(title)
         ax.set_xlabel("Image X (pixels)")

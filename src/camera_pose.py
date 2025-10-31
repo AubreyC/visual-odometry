@@ -10,10 +10,7 @@ class CameraPose:
     """Represents a camera pose with position and orientation."""
 
     def __init__(
-        self,
-        position: np.ndarray,
-        orientation: np.ndarray,
-        timestamp: Optional[float] = None,
+        self, position: np.ndarray, orientation: np.ndarray, timestamp: float = 0.0
     ):
         """Initialize camera pose.
 
@@ -97,7 +94,7 @@ class CameraPose:
 
     @classmethod
     def from_transform_matrix(
-        cls, transform_matrix: np.ndarray, timestamp: Optional[float] = None
+        cls, transform_matrix: np.ndarray, timestamp: float = 0.0
     ) -> "CameraPose":
         """Create CameraPose from 4x4 transformation matrix.
 

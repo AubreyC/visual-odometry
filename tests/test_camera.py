@@ -14,6 +14,20 @@ class TestPinHoleCamera:
         assert camera.fy == 600.0
         assert camera.cx == 320.0
         assert camera.cy == 240.0
+        assert camera.k1 == 0.0
+        assert camera.k2 == 0.0
+        assert camera.k3 == 0.0
+
+    def test_valid_initialization_with_distortion(self) -> None:
+        """Test valid camera initialization with distortion coefficients."""
+        camera = PinHoleCamera(fx=500.0, fy=600.0, cx=320.0, cy=240.0, k1=-0.1, k2=0.01, k3=-0.001)
+        assert camera.fx == 500.0
+        assert camera.fy == 600.0
+        assert camera.cx == 320.0
+        assert camera.cy == 240.0
+        assert camera.k1 == -0.1
+        assert camera.k2 == 0.01
+        assert camera.k3 == -0.001
 
     @pytest.mark.parametrize(
         "invalid_fx", [-500.0, 0.0, float("inf"), float("-inf"), float("nan")]
@@ -50,6 +64,30 @@ class TestPinHoleCamera:
             ValidationError, match=r"Principal point cy must be a finite number.*"
         ):
             PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=invalid_cy)
+
+    @pytest.mark.parametrize("invalid_k1", [float("inf"), float("-inf"), float("nan")])
+    def test_invalid_distortion_k1(self, invalid_k1: float) -> None:
+        """Test invalid distortion coefficient k1 raises ValidationError."""
+        with pytest.raises(
+            ValidationError, match=r"Radial distortion coefficient k1 must be a finite number.*"
+        ):
+            PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=invalid_k1)
+
+    @pytest.mark.parametrize("invalid_k2", [float("inf"), float("-inf"), float("nan")])
+    def test_invalid_distortion_k2(self, invalid_k2: float) -> None:
+        """Test invalid distortion coefficient k2 raises ValidationError."""
+        with pytest.raises(
+            ValidationError, match=r"Radial distortion coefficient k2 must be a finite number.*"
+        ):
+            PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k2=invalid_k2)
+
+    @pytest.mark.parametrize("invalid_k3", [float("inf"), float("-inf"), float("nan")])
+    def test_invalid_distortion_k3(self, invalid_k3: float) -> None:
+        """Test invalid distortion coefficient k3 raises ValidationError."""
+        with pytest.raises(
+            ValidationError, match=r"Radial distortion coefficient k3 must be a finite number.*"
+        ):
+            PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k3=invalid_k3)
 
     def test_valid_projection(self) -> None:
         """Test valid 3D point projection."""
@@ -250,3 +288,80 @@ class TestPinHoleCamera:
             ValidationError, match="depths must be a number or numpy array"
         ):
             camera.unproject(points_2d, "invalid_depths")  # type: ignore[arg-type]
+
+    def test_projection_with_distortion(self) -> None:
+        """Test 3D point projection with radial distortion."""
+        # Camera with barrel distortion (k1 > 0)
+        camera = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.1, k2=0.01, k3=0.001)
+        points_3d = np.array([[1.0, 0.0, 1.0], [0.0, 1.0, 1.0]])  # Points at unit distance from center
+
+        projected = camera.project(points_3d)
+
+        # With distortion, points should be pushed outward from center
+        # Expected projection without distortion: [[570.0, 240.0], [320.0, 490.0]]
+        # With distortion, they should be further from center
+        assert projected.shape == (2, 2)
+        assert np.all(np.isfinite(projected))
+
+        # Points should be further from optical center due to barrel distortion
+        center_u, center_v = 320.0, 240.0
+        distances = np.sqrt((projected[:, 0] - center_u)**2 + (projected[:, 1] - center_v)**2)
+        expected_distances_no_distortion = np.sqrt((570.0 - 320.0)**2 + (490.0 - 240.0)**2)  # ~250 for both
+        assert distances[0] > 250.0  # Should be larger due to distortion
+        assert distances[1] > 250.0
+
+    def test_projection_no_distortion_when_coeffs_zero(self) -> None:
+        """Test that projection behaves the same with zero distortion coefficients."""
+        camera_no_distortion = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.0, k2=0.0, k3=0.0)
+        camera_default = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0)
+
+        points_3d = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+
+        projected_explicit = camera_no_distortion.project(points_3d)
+        projected_default = camera_default.project(points_3d)
+
+        np.testing.assert_array_equal(projected_explicit, projected_default)
+
+    def test_undistort_no_distortion(self) -> None:
+        """Test undistort method with no distortion coefficients."""
+        camera = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0)
+        points_2d = np.array([[370.0, 290.0], [420.0, 340.0]])
+
+        undistorted = camera.undistort(points_2d)
+
+        # Should return the same points when no distortion
+        np.testing.assert_array_equal(undistorted, points_2d)
+
+    def test_undistort_with_distortion(self) -> None:
+        """Test undistort method with distortion coefficients."""
+        camera = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.1, k2=0.01, k3=0.001)
+
+        # Create some distorted points
+        points_3d = np.array([[0.5, 0.3, 1.0], [-0.2, 0.4, 1.0]])
+        distorted_points = camera.project(points_3d)
+
+        # Undistort them back
+        undistorted_points = camera.undistort(distorted_points)
+
+        # Should be close to original (allowing for numerical precision)
+        np.testing.assert_allclose(undistorted_points, points_3d[:, :2] * np.array([500.0, 500.0]) + np.array([320.0, 240.0]), rtol=1e-3)
+
+    def test_undistort_invalid_input(self) -> None:
+        """Test undistort method with invalid input."""
+        camera = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.1)
+
+        # Test with non-numpy array
+        with pytest.raises(ValidationError, match="points_2d must be a numpy array"):
+            camera.undistort([[320.0, 240.0]])  # type: ignore[arg-type]
+
+        # Test with wrong shape
+        with pytest.raises(ValidationError, match="points_2d must have shape"):
+            camera.undistort(np.array([[320.0, 240.0, 1.0]]))
+
+        # Test with empty array
+        with pytest.raises(ValidationError, match="points_2d cannot be empty"):
+            camera.undistort(np.empty((0, 2)))
+
+        # Test with non-finite values
+        with pytest.raises(ValidationError, match="points_2d must contain only finite values"):
+            camera.undistort(np.array([[float("nan"), 240.0]]))

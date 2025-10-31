@@ -4,7 +4,7 @@ import numpy as np
 
 from .camera import PinHoleCamera, ValidationError
 from .camera_pose import CameraPose
-from .feature_observation import FeatureObservation, FeatureTrack, SyntheticImage
+from .feature_observation import FeatureObservation, FeatureTrack, ImageObservations
 
 
 class ImageRenderer:
@@ -28,6 +28,7 @@ class ImageRenderer:
         self,
         landmarks: np.ndarray,
         camera_pose: CameraPose,
+        camera_id: int = 0,
         landmark_ids: Optional[List[int]] = None,
     ) -> List[FeatureObservation]:
         """Project 3D landmarks to 2D image coordinates for given camera pose.
@@ -40,6 +41,24 @@ class ImageRenderer:
         Returns:
             List[FeatureObservation]: List of valid feature observations.
         """
+
+        # Validate landmarks
+        if not isinstance(landmarks, np.ndarray):
+            raise ValidationError(
+                f"landmarks must be a numpy array, got {type(landmarks)}"
+            )
+
+        if landmarks.ndim != 2 or landmarks.shape[1] != 3:
+            raise ValidationError(
+                f"landmarks must have shape (N, 3), got {landmarks.shape}"
+            )
+
+        if landmarks.shape[0] == 0:
+            raise ValidationError("landmarks cannot be empty")
+
+        if not np.all(np.isfinite(landmarks)):
+            raise ValidationError("landmarks must contain only finite values")
+
         if landmark_ids is None:
             landmark_ids = list(range(len(landmarks)))
 
@@ -60,9 +79,12 @@ class ImageRenderer:
             # If projection fails for any landmark, return empty list
             return []
 
+        if landmark_ids is None:
+            landmark_ids = list(range(len(landmarks)))
+
         # Filter observations that are within image bounds and in front of camera
-        for landmark_id, landmark_3d, landmark_camera, img_coord in zip(
-            landmark_ids, landmarks, landmarks_camera, image_coords
+        for landmark_id, landmark_camera, img_coord in zip(
+            landmark_ids, landmarks_camera, image_coords
         ):
             # Check if landmark is in front of camera (positive Z in camera frame)
             if landmark_camera[2] <= 0:
@@ -76,8 +98,7 @@ class ImageRenderer:
             observation = FeatureObservation(
                 landmark_id=landmark_id,
                 image_coords=img_coord,
-                landmark_3d=landmark_3d,
-                camera_pose=camera_pose,
+                camera_id=camera_id,
                 timestamp=camera_pose.timestamp,
             )
             observations.append(observation)
@@ -88,8 +109,9 @@ class ImageRenderer:
         self,
         landmarks: np.ndarray,
         camera_pose: CameraPose,
+        camera_id: int = 0,
         landmark_ids: Optional[List[int]] = None,
-    ) -> SyntheticImage:
+    ) -> ImageObservations:
         """Render a synthetic image from landmarks and camera pose.
 
         Args:
@@ -98,15 +120,16 @@ class ImageRenderer:
             landmark_ids (Optional[List[int]]): IDs for landmarks.
 
         Returns:
-            SyntheticImage: Synthetic image with observations.
+            ImageObservations: Image features with observations.
         """
         observations = self.project_landmarks_to_image(
-            landmarks, camera_pose, landmark_ids
+            landmarks, camera_pose, camera_id=camera_id, landmark_ids=landmark_ids
         )
 
-        return SyntheticImage(
-            camera_pose=camera_pose,
-            observations=observations,
+        return ImageObservations(
+            camera_id=0,  # Default camera ID
+            timestamp=camera_pose.timestamp,
+            feature_observations=observations,
             image_width=self.image_width,
             image_height=self.image_height,
         )
@@ -134,14 +157,14 @@ class ImageRenderer:
 
         # Initialize tracks for each landmark
         tracks = []
-        for landmark_id, landmark_3d in zip(landmark_ids, landmarks):
-            track = FeatureTrack(landmark_id, landmark_3d)
+        for landmark_id in landmark_ids:
+            track = FeatureTrack(landmark_id)
             tracks.append(track)
 
         # Generate observations for each pose
         for pose in camera_poses:
             observations = self.project_landmarks_to_image(
-                landmarks, pose, landmark_ids
+                landmarks, pose, camera_id=0, landmark_ids=landmark_ids
             )
 
             # Add observations to corresponding tracks
@@ -158,7 +181,7 @@ class ImageRenderer:
         landmarks: np.ndarray,
         camera_poses: List[CameraPose],
         landmark_ids: Optional[List[int]] = None,
-    ) -> List[SyntheticImage]:
+    ) -> List[ImageObservations]:
         """Render a sequence of synthetic images.
 
         Args:
@@ -167,7 +190,7 @@ class ImageRenderer:
             landmark_ids (Optional[List[int]]): IDs for landmarks.
 
         Returns:
-            List[SyntheticImage]: List of synthetic images.
+            List[ImageObservations]: List of synthetic images.
         """
         images = []
 

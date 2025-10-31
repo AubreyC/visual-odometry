@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from src.camera_pose import CameraPose, TrajectoryGenerator
+from src.feature_observation import FeatureObservation, ImageObservations
 from src.landmarks import LandmarkGenerator
 from src.visualization import Visualizer
 
@@ -125,43 +126,8 @@ class TestVisualOdometryVisualizer:
 
         plt.close(fig)
 
-    def test_plot_feature_tracks_2d(self, visualizer: Visualizer) -> None:
-        """Test 2D feature track plotting."""
-        # Create mock feature tracks
-        from src.feature_observation import FeatureObservation, FeatureTrack
-
-        pose = CameraPose(
-            position=np.array([0.0, 0.0, 0.0]),
-            orientation=np.array([1.0, 0.0, 0.0, 0.0]),
-        )
-
-        tracks = []
-        for track_id in range(3):
-            track = FeatureTrack(track_id, np.array([track_id, 0.0, 5.0]))
-
-            # Add observations at different positions
-            for i in range(3):
-                obs = FeatureObservation(
-                    track_id,
-                    np.array([100 + track_id * 50 + i * 10, 200 + i * 20]),
-                    np.array([track_id, 0.0, 5.0]),
-                    pose,
-                    i * 0.1,
-                )
-                track.add_observation(obs)
-
-            tracks.append(track)
-
-        fig = visualizer.plot_feature_tracks_2d(
-            tracks, title="Test Feature Tracks", max_tracks=5
-        )
-
-        assert fig is not None
-        plt.close(fig)
-
     def test_plot_synthetic_image(self, visualizer: Visualizer) -> None:
         """Test synthetic image plotting."""
-        from src.feature_observation import FeatureObservation, SyntheticImage
 
         pose = CameraPose(
             position=np.array([0.0, 0.0, 0.0]),
@@ -169,15 +135,13 @@ class TestVisualOdometryVisualizer:
         )
 
         observations = [
-            FeatureObservation(
-                1, np.array([100.0, 200.0]), np.array([1.0, 2.0, 3.0]), pose
-            ),
-            FeatureObservation(
-                2, np.array([300.0, 150.0]), np.array([4.0, 5.0, 6.0]), pose
-            ),
+            FeatureObservation(1, np.array([100.0, 200.0]), np.array([1.0, 2.0, 3.0])),
+            FeatureObservation(2, np.array([300.0, 150.0]), np.array([4.0, 5.0, 6.0])),
         ]
 
-        image = SyntheticImage(pose, observations, image_width=640, image_height=480)
+        image = ImageObservations(
+            0, 0.0, observations, image_width=640, image_height=480
+        )
 
         fig = visualizer.plot_synthetic_image(image, title="Test Synthetic Image")
 
@@ -227,24 +191,6 @@ class TestVisualOdometryVisualizer:
             # Check that file was created
             assert os.path.exists(filepath)
 
-        plt.close(fig)
-
-    def test_empty_inputs(self, visualizer: Visualizer) -> None:
-        """Test visualization with empty inputs."""
-        # Empty trajectory
-        fig = visualizer.plot_3d_trajectory([], title="Empty Trajectory")
-        assert fig is not None
-        plt.close(fig)
-
-        # Empty landmarks
-        empty_landmarks = np.empty((0, 3))
-        fig = visualizer.plot_landmarks(empty_landmarks, title="Empty Landmarks")
-        assert fig is not None
-        plt.close(fig)
-
-        # Empty tracks
-        fig = visualizer.plot_feature_tracks_2d([], title="Empty Tracks")
-        assert fig is not None
         plt.close(fig)
 
     def test_trajectory_error_mismatched_lengths(

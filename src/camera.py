@@ -6,7 +6,7 @@ from .validation_error import ProcessingError, ValidationError
 
 
 class PinHoleCamera:
-    def __init__(self, fx: float, fy: float, cx: float, cy: float):
+    def __init__(self, fx: float, fy: float, cx: float, cy: float, k1: float = 0.0, k2: float = 0.0, k3: float = 0.0):
         """Initialize the camera with intrinsic parameters.
 
         Args:
@@ -14,6 +14,9 @@ class PinHoleCamera:
             fy (float): Focal length in the y direction.
             cx (float): Principal point x-coordinate.
             cy (float): Principal point y-coordinate.
+            k1 (float): First radial distortion coefficient. Default is 0.0.
+            k2 (float): Second radial distortion coefficient. Default is 0.0.
+            k3 (float): Third radial distortion coefficient. Default is 0.0.
         """
         # Validate focal lengths
         if not isinstance(fx, (int, float)) or not np.isfinite(fx) or fx <= 0:
@@ -35,11 +38,29 @@ class PinHoleCamera:
                 f"Principal point cy must be a finite number, got {cy}"
             )
 
+        # Validate distortion coefficients
+        if not isinstance(k1, (int, float)) or not np.isfinite(k1):
+            raise ValidationError(
+                f"Radial distortion coefficient k1 must be a finite number, got {k1}"
+            )
+        if not isinstance(k2, (int, float)) or not np.isfinite(k2):
+            raise ValidationError(
+                f"Radial distortion coefficient k2 must be a finite number, got {k2}"
+            )
+        if not isinstance(k3, (int, float)) or not np.isfinite(k3):
+            raise ValidationError(
+                f"Radial distortion coefficient k3 must be a finite number, got {k3}"
+            )
+
         self.fx = fx
         self.fy = fy
 
         self.cx = cx
         self.cy = cy
+
+        self.k1 = k1
+        self.k2 = k2
+        self.k3 = k3
 
     def project(self, points_3d: np.ndarray) -> np.ndarray:
         """Project 3D points to the image plane.
@@ -75,9 +96,95 @@ class PinHoleCamera:
             )
 
         x, y, z = points_3d[:, 0], points_3d[:, 1], points_3d[:, 2]
-        u = (self.fx * x / z) + self.cx
-        v = (self.fy * y / z) + self.cy
+
+        # Basic pinhole projection to normalized coordinates
+        x_norm = x / z
+        y_norm = y / z
+
+        # Apply radial distortion if any coefficients are non-zero
+        if self.k1 != 0.0 or self.k2 != 0.0 or self.k3 != 0.0:
+            # Calculate radial distance from optical center
+            r_squared = x_norm**2 + y_norm**2
+            r = np.sqrt(r_squared)
+
+            # Apply radial distortion formula: r_distorted = r * (1 + k1*r^2 + k2*r^4 + k3*r^6)
+            distortion_factor = 1.0 + self.k1 * r_squared + self.k2 * r_squared**2 + self.k3 * r_squared**3
+
+            # Avoid division by zero for points at optical center
+            r_distorted = r * distortion_factor
+            scale_factor = np.where(r == 0, 1.0, r_distorted / r)
+
+            x_norm = x_norm * scale_factor
+            y_norm = y_norm * scale_factor
+
+        # Convert to pixel coordinates
+        u = (self.fx * x_norm) + self.cx
+        v = (self.fy * y_norm) + self.cy
         result: np.ndarray[np.Any, np.dtype[np.float64]] = np.vstack((u, v)).T
+        return result
+
+    def undistort(self, points_2d: np.ndarray) -> np.ndarray:
+        """Remove radial distortion from 2D image points.
+
+        Args:
+            points_2d (np.ndarray): A numpy array of distorted 2D image points in the format [[u1, v1], [u2, v2], ...].
+
+        Returns:
+            np.ndarray: The undistorted 2D image coordinates [[u1, v1], [u2, v2], ...].
+        """
+        # Validate input
+        if not isinstance(points_2d, np.ndarray):
+            raise ValidationError(
+                f"points_2d must be a numpy array, got {type(points_2d)}"
+            )
+
+        if points_2d.ndim != 2 or points_2d.shape[1] != 2:
+            raise ValidationError(
+                f"points_2d must have shape (N, 2), got {points_2d.shape}"
+            )
+
+        if points_2d.shape[0] == 0:
+            raise ValidationError("points_2d cannot be empty")
+
+        if not np.all(np.isfinite(points_2d)):
+            raise ValidationError("points_2d must contain only finite values")
+
+        # If no distortion, return points as-is
+        if self.k1 == 0.0 and self.k2 == 0.0 and self.k3 == 0.0:
+            return points_2d.copy()
+
+        # Convert to normalized coordinates
+        u, v = points_2d[:, 0], points_2d[:, 1]
+        x_norm_distorted = (u - self.cx) / self.fx
+        y_norm_distorted = (v - self.cy) / self.fy
+
+        # Iterative undistortion (typically converges in 1-2 iterations for reasonable distortion)
+        x_norm = x_norm_distorted.copy()
+        y_norm = y_norm_distorted.copy()
+
+        for _ in range(5):  # Max 5 iterations
+            r_squared = x_norm**2 + y_norm**2
+            r = np.sqrt(r_squared)
+
+            # Apply distortion formula to current estimate
+            distortion_factor = 1.0 + self.k1 * r_squared + self.k2 * r_squared**2 + self.k3 * r_squared**3
+
+            # Calculate correction
+            r_distorted = r * distortion_factor
+            scale_factor = np.where(r == 0, 1.0, r_distorted / r)
+
+            x_norm_corrected = x_norm_distorted / scale_factor
+            y_norm_corrected = y_norm_distorted / scale_factor
+
+            # Update estimate
+            x_norm = x_norm_corrected
+            y_norm = y_norm_corrected
+
+        # Convert back to pixel coordinates
+        u_undistorted = (self.fx * x_norm) + self.cx
+        v_undistorted = (self.fy * y_norm) + self.cy
+
+        result: np.ndarray[np.Any, np.dtype[np.float64]] = np.vstack((u_undistorted, v_undistorted)).T
         return result
 
     def unproject(

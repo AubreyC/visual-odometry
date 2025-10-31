@@ -3,12 +3,8 @@ import pytest
 
 from src.camera import PinHoleCamera
 from src.camera_pose import CameraPose
-from src.feature_observation import (
-    FeatureObservation,
-    FeatureTrack,
-    SyntheticImage,
-)
-from src.image_renderer import ImageRenderer
+from src.feature_observation import FeatureObservation, FeatureTrack
+from src.image_renderer import ImageObservations, ImageRenderer
 
 
 class TestFeatureObservation:
@@ -18,40 +14,15 @@ class TestFeatureObservation:
         """Test FeatureObservation initialization."""
         landmark_id = 5
         image_coords = np.array([320.0, 240.0])
-        landmark_3d = np.array([1.0, 2.0, 3.0])
-        camera_pose = CameraPose(
-            position=np.array([0.0, 0.0, 0.0]),
-            orientation=np.array([1.0, 0.0, 0.0, 0.0]),
-        )
         timestamp = 1.5
 
         obs = FeatureObservation(
-            landmark_id, image_coords, landmark_3d, camera_pose, timestamp
+            landmark_id, image_coords, camera_id=0, timestamp=timestamp
         )
 
         assert obs.landmark_id == landmark_id
         assert np.allclose(obs.image_coords, image_coords)
-        assert np.allclose(obs.landmark_3d, landmark_3d)
-        assert obs.camera_pose is camera_pose
         assert obs.timestamp == timestamp
-
-    def test_string_representation(self) -> None:
-        """Test string representation."""
-        obs = FeatureObservation(
-            landmark_id=1,
-            image_coords=np.array([100.5, 200.8]),
-            landmark_3d=np.array([1.0, 2.0, 3.0]),
-            camera_pose=CameraPose(
-                position=np.array([0.0, 0.0, 0.0]),
-                orientation=np.array([1.0, 0.0, 0.0, 0.0]),
-            ),
-        )
-
-        repr_str = repr(obs)
-        assert "FeatureObservation" in repr_str
-        assert "landmark_id=1" in repr_str
-        assert "100.5" in repr_str
-        assert "200.8" in repr_str
 
 
 class TestFeatureTrack:
@@ -60,80 +31,95 @@ class TestFeatureTrack:
     def test_initialization(self) -> None:
         """Test FeatureTrack initialization."""
         landmark_id = 3
-        landmark_3d = np.array([1.0, 2.0, 3.0])
 
-        track = FeatureTrack(landmark_id, landmark_3d)
-
+        track = FeatureTrack(landmark_id)
         assert track.landmark_id == landmark_id
-        assert np.allclose(track.landmark_3d, landmark_3d)
         assert track.observations == []
         assert track.length() == 0
 
     def test_add_observation(self) -> None:
         """Test adding observations to track."""
-        track = FeatureTrack(1, np.array([1.0, 2.0, 3.0]))
+        landmark_id = 3
+        landmark_3d = np.array([[1.0, 2.0, 3.0]])
+        landmark_ids = [landmark_id for i in range(len(landmark_3d))]
 
-        pose = CameraPose(
+        track = FeatureTrack(landmark_id)
+
+        camera_pose = CameraPose(
             position=np.array([0.0, 0.0, 0.0]),
             orientation=np.array([1.0, 0.0, 0.0, 0.0]),
         )
 
-        obs1 = FeatureObservation(
-            1, np.array([100.0, 200.0]), np.array([1.0, 2.0, 3.0]), pose, 0.0
-        )
-        obs2 = FeatureObservation(
-            1, np.array([110.0, 210.0]), np.array([1.0, 2.0, 3.0]), pose, 0.1
+        camera: PinHoleCamera = PinHoleCamera(fx=1.0, fy=1.0, cx=0.0, cy=0.0)
+        image_renderer: ImageRenderer = ImageRenderer(camera)
+
+        list_of_observations = image_renderer.project_landmarks_to_image(
+            landmark_3d, camera_pose, camera_id=0, landmark_ids=landmark_ids
         )
 
-        track.add_observation(obs1)
-        track.add_observation(obs2)
+        for observation in list_of_observations:
+            track.add_observation(observation)
 
-        assert track.length() == 2
-        assert track.observations[0] is obs1
-        assert track.observations[1] is obs2
+        assert track.length() == len(list_of_observations)
 
     def test_add_wrong_landmark_observation(self) -> None:
         """Test adding observation with wrong landmark ID raises error."""
-        track = FeatureTrack(1, np.array([1.0, 2.0, 3.0]))
+        track = FeatureTrack(1)
 
-        pose = CameraPose(
-            position=np.array([0.0, 0.0, 0.0]),
-            orientation=np.array([1.0, 0.0, 0.0, 0.0]),
-        )
-
-        wrong_obs = FeatureObservation(
-            2, np.array([100.0, 200.0]), np.array([1.0, 2.0, 3.0]), pose, 0.0
+        feature_observation: FeatureObservation = FeatureObservation(
+            landmark_id=2,
+            image_coords=np.array([100.0, 200.0]),
+            camera_id=0,
+            timestamp=0.0,
         )
 
         with pytest.raises(Exception):  # Should raise ValidationError
-            track.add_observation(wrong_obs)
+            track.add_observation(feature_observation)
 
     def test_get_image_coordinates(self) -> None:
         """Test getting image coordinates from track."""
-        track = FeatureTrack(1, np.array([1.0, 2.0, 3.0]))
+        track = FeatureTrack(1)
 
-        pose = CameraPose(
+        camera_pose = CameraPose(
             position=np.array([0.0, 0.0, 0.0]),
             orientation=np.array([1.0, 0.0, 0.0, 0.0]),
+            timestamp=0.0,
         )
 
         # Add observations
-        coords = [
-            np.array([100.0, 200.0]),
-            np.array([110.0, 210.0]),
-            np.array([120.0, 220.0]),
-        ]
-        for i, coord in enumerate(coords):
-            obs = FeatureObservation(1, coord, np.array([1.0, 2.0, 3.0]), pose, i * 0.1)
-            track.add_observation(obs)
+        landmark_3d = np.array([[1.0, 2.0, 3.0]])
 
-        image_coords = track.get_image_coordinates()
-        assert image_coords.shape == (3, 2)
-        assert np.allclose(image_coords, coords)
+        camera: PinHoleCamera = PinHoleCamera(fx=1.0, fy=1.0, cx=0.0, cy=0.0)
+        image_renderer: ImageRenderer = ImageRenderer(camera)
+
+        list_of_observations = []
+
+        num_observations = 5
+        for i in range(num_observations):
+            camera_pose.timestamp = i * 0.1
+            obs = image_renderer.project_landmarks_to_image(
+                landmark_3d, camera_pose, landmark_ids=[1]
+            )
+            list_of_observations.append(obs[0])
+            track.add_observation(obs[0])
+
+        assert track.length() == num_observations
+
+        for i, observation in enumerate(track.observations):
+            assert observation.timestamp == i * 0.1
+            assert (
+                observation.image_coords == list_of_observations[i].image_coords
+            ).all()
+            assert observation.camera_id == list_of_observations[i].camera_id
+            assert observation.landmark_id == list_of_observations[i].landmark_id
+            assert observation.timestamp == list_of_observations[i].timestamp
+            assert observation.camera_id == list_of_observations[i].camera_id
+            assert observation.landmark_id == list_of_observations[i].landmark_id
+            assert observation.image_coords.shape == (2,)
 
     def test_get_timestamps(self) -> None:
         """Test getting timestamps from track."""
-        track = FeatureTrack(1, np.array([1.0, 2.0, 3.0]))
+        track = FeatureTrack(1)
 
         pose = CameraPose(
             position=np.array([0.0, 0.0, 0.0]),
@@ -143,70 +129,49 @@ class TestFeatureTrack:
         # Add observations with timestamps
         timestamps = [0.0, 0.1, 0.2]
         for ts in timestamps:
-            obs = FeatureObservation(
-                1, np.array([100.0, 200.0]), np.array([1.0, 2.0, 3.0]), pose, ts
-            )
+            obs = FeatureObservation(1, np.array([100.0, 200.0]), 0, ts)
             track.add_observation(obs)
 
         track_timestamps = track.get_timestamps()
         assert track_timestamps == timestamps
 
-    def test_string_representation(self) -> None:
-        """Test string representation."""
-        track = FeatureTrack(5, np.array([1.0, 2.0, 3.0]))
-        repr_str = repr(track)
-        assert "FeatureTrack" in repr_str
-        assert "landmark_id=5" in repr_str
-        assert "length=0" in repr_str
 
-
-class TestSyntheticImage:
-    """Test suite for SyntheticImage class."""
+class TestImageObservations:
+    """Test suite for ImageObservations class."""
 
     def test_initialization(self) -> None:
-        """Test SyntheticImage initialization."""
+        """Test ImageObservations initialization."""
         pose = CameraPose(
             position=np.array([1.0, 2.0, 3.0]),
             orientation=np.array([1.0, 0.0, 0.0, 0.0]),
         )
 
         observations = [
-            FeatureObservation(
-                0, np.array([100.0, 200.0]), np.array([1.0, 2.0, 3.0]), pose
-            ),
-            FeatureObservation(
-                1, np.array([150.0, 250.0]), np.array([4.0, 5.0, 6.0]), pose
-            ),
+            FeatureObservation(0, np.array([100.0, 200.0]), 0, 0.0),
+            FeatureObservation(1, np.array([150.0, 250.0]), 0, 0.0),
         ]
 
-        image = SyntheticImage(pose, observations, image_width=640, image_height=480)
+        image = ImageObservations(
+            0, 0.0, observations, image_width=640, image_height=480
+        )
 
-        assert image.camera_pose is pose
-        assert image.observations == observations
+        assert image.feature_observations == observations
         assert image.image_width == 640
         assert image.image_height == 480
-        assert len(image) == 2
+        assert len(image.feature_observations) == 2
 
     def test_get_visible_landmarks(self) -> None:
         """Test getting visible landmark IDs."""
-        pose = CameraPose(
-            position=np.array([0.0, 0.0, 0.0]),
-            orientation=np.array([1.0, 0.0, 0.0, 0.0]),
-        )
 
         observations = [
-            FeatureObservation(
-                5, np.array([100.0, 200.0]), np.array([1.0, 2.0, 3.0]), pose
-            ),
-            FeatureObservation(
-                10, np.array([150.0, 250.0]), np.array([4.0, 5.0, 6.0]), pose
-            ),
-            FeatureObservation(
-                15, np.array([200.0, 300.0]), np.array([7.0, 8.0, 9.0]), pose
-            ),
+            FeatureObservation(5, np.array([100.0, 200.0]), 0, 0.0),
+            FeatureObservation(10, np.array([150.0, 250.0]), 0, 0.0),
+            FeatureObservation(15, np.array([200.0, 300.0]), 0, 0.0),
         ]
 
-        image = SyntheticImage(pose, observations)
+        image = ImageObservations(
+            0, 0.0, observations, image_width=640, image_height=480
+        )
 
         visible_ids = image.get_visible_landmarks()
         assert visible_ids == [5, 10, 15]
@@ -218,14 +183,11 @@ class TestSyntheticImage:
             orientation=np.array([1.0, 0.0, 0.0, 0.0]),
         )
 
-        obs1 = FeatureObservation(
-            1, np.array([100.0, 200.0]), np.array([1.0, 2.0, 3.0]), pose
+        obs1 = FeatureObservation(1, np.array([100.0, 200.0]), 0, 0.0)
+        obs2 = FeatureObservation(2, np.array([150.0, 250.0]), 0, 0.0)
+        image = ImageObservations(
+            0, 0.0, [obs1, obs2], image_width=640, image_height=480
         )
-        obs2 = FeatureObservation(
-            2, np.array([150.0, 250.0]), np.array([4.0, 5.0, 6.0]), pose
-        )
-
-        image = SyntheticImage(pose, [obs1, obs2])
 
         # Test finding existing landmark
         found_obs = image.get_observations_for_landmark(1)
@@ -234,18 +196,6 @@ class TestSyntheticImage:
         # Test landmark not in image
         not_found_obs = image.get_observations_for_landmark(99)
         assert not_found_obs is None
-
-    def test_string_representation(self) -> None:
-        """Test string representation."""
-        pose = CameraPose(
-            position=np.array([0.0, 0.0, 0.0]),
-            orientation=np.array([1.0, 0.0, 0.0, 0.0]),
-        )
-        image = SyntheticImage(pose, [])
-
-        repr_str = repr(image)
-        assert "SyntheticImage" in repr_str
-        assert "num_observations=0" in repr_str
 
 
 class TestImageRenderer:
@@ -264,7 +214,7 @@ class TestImageRenderer:
     @pytest.fixture
     def landmarks(self) -> np.ndarray:
         """Create test landmarks."""
-        return np.array(
+        result: np.ndarray = np.array(
             [
                 [1.0, 0.0, 5.0],  # In front, should be visible
                 [0.0, 1.0, 5.0],  # In front, should be visible
@@ -272,6 +222,7 @@ class TestImageRenderer:
                 [10.0, 0.0, 5.0],  # Far away, may be out of image bounds
             ]
         )
+        return result
 
     @pytest.fixture
     def camera_pose(self) -> CameraPose:
@@ -301,7 +252,6 @@ class TestImageRenderer:
         # Check that observations have correct properties
         for obs in observations:
             assert isinstance(obs, FeatureObservation)
-            assert obs.camera_pose is camera_pose
             assert obs.timestamp == camera_pose.timestamp
 
             # Check image coordinates are within bounds
@@ -315,13 +265,12 @@ class TestImageRenderer:
         """Test rendering a synthetic image."""
         image = renderer.render_image(landmarks, camera_pose)
 
-        assert isinstance(image, SyntheticImage)
-        assert image.camera_pose is camera_pose
+        assert isinstance(image, ImageObservations)
         assert image.image_width == renderer.image_width
         assert image.image_height == renderer.image_height
 
         # Should have some observations
-        assert len(image) >= 0
+        assert len(image.feature_observations) >= 0
 
     def test_generate_feature_tracks(self, renderer: ImageRenderer) -> None:
         """Test generating feature tracks."""
@@ -381,8 +330,8 @@ class TestImageRenderer:
 
         assert len(images) == 2
         for i, image in enumerate(images):
-            assert isinstance(image, SyntheticImage)
-            assert image.camera_pose.timestamp == i * 0.1
+            assert isinstance(image, ImageObservations)
+            assert image.timestamp == i * 0.1
 
     def test_get_track_statistics(self, renderer: ImageRenderer) -> None:
         """Test getting track statistics."""
@@ -393,22 +342,13 @@ class TestImageRenderer:
         assert stats["total_observations"] == 0
 
         # Create some test tracks
-        track1 = FeatureTrack(1, np.array([1.0, 2.0, 3.0]))
-        track2 = FeatureTrack(2, np.array([4.0, 5.0, 6.0]))
-
-        pose = CameraPose(
-            position=np.array([0.0, 0.0, 0.0]),
-            orientation=np.array([1.0, 0.0, 0.0, 0.0]),
-        )
+        track1 = FeatureTrack(1)
+        track2 = FeatureTrack(2)
 
         # Add observations to tracks
         for i in range(3):
-            obs1 = FeatureObservation(
-                1, np.array([100.0, 200.0]), np.array([1.0, 2.0, 3.0]), pose, i * 0.1
-            )
-            obs2 = FeatureObservation(
-                2, np.array([150.0, 250.0]), np.array([4.0, 5.0, 6.0]), pose, i * 0.1
-            )
+            obs1 = FeatureObservation(1, np.array([100.0, 200.0]), 0, i * 0.1)
+            obs2 = FeatureObservation(2, np.array([150.0, 250.0]), 0, i * 0.1)
             track1.add_observation(obs1)
             track2.add_observation(obs2)
 
@@ -428,4 +368,6 @@ class TestImageRenderer:
         landmark_ids = [1, 2]  # Wrong length
 
         with pytest.raises(Exception):  # Should raise ValidationError
-            renderer.project_landmarks_to_image(landmarks, camera_pose, landmark_ids)
+            renderer.project_landmarks_to_image(
+                landmarks, camera_pose, camera_id=0, landmark_ids=landmark_ids
+            )

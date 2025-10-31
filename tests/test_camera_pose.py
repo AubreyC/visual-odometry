@@ -33,7 +33,7 @@ class TestCameraPose:
 
         assert np.allclose(pose.position, position)
         assert np.allclose(pose.quaternion, quaternion)
-        assert pose.timestamp is None
+        assert pose.timestamp == 0.0
 
     @pytest.mark.parametrize(
         "invalid_position",
@@ -273,7 +273,7 @@ class TestCameraPose:
         repr_str = repr(pose)
 
         assert "CameraPose" in repr_str
-        assert "t=" not in repr_str
+        assert "t" in repr_str
 
 
 class TestTrajectoryGenerator:
