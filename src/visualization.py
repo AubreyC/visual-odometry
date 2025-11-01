@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 import cv2
 import matplotlib.pyplot as plt
@@ -7,6 +7,7 @@ import numpy as np
 from .camera import PinHoleCamera
 from .camera_pose import CameraPose
 from .feature_observation import ImageObservations
+from .geometry import GeometryUtils
 
 
 class Visualizer:
@@ -573,6 +574,7 @@ class OpenCVSceneVisualizer:
         image_width: int = 1280,
         image_height: int = 720,
         background_color: Tuple[int, int, int] = (255, 255, 255),
+        interactive: bool = True,
     ):
         """Initialize the OpenCV scene visualizer.
 
@@ -580,10 +582,13 @@ class OpenCVSceneVisualizer:
             image_width (int): Width of the visualization image.
             image_height (int): Height of the visualization image.
             background_color (Tuple[int, int, int]): RGB background color (0-255).
+            interactive (bool): Whether to enable interactive camera controls (mouse/keyboard).
+                               When False, show_scene displays a static view.
         """
         self.image_width = image_width
         self.image_height = image_height
         self.background_color = background_color
+        self.interactive = interactive
 
         # Camera intrinsic parameters for scene visualization
         self.scene_camera = PinHoleCamera(
@@ -592,6 +597,141 @@ class OpenCVSceneVisualizer:
             cx=image_width / 2,
             cy=image_height / 2,
         )
+
+        # Interactive camera control variables
+        self.current_scene_camera_pose: Optional[CameraPose] = None
+        self.mouse_dragging = False
+        self.last_mouse_pos: Optional[Tuple[int, int]] = None
+        self.move_speed = 0.1  # Movement speed for position controls
+        self.rotation_speed = 0.01  # Rotation speed for mouse controls
+
+    def mouse_callback(
+        self, event: int, x: int, y: int, flags: int, param: Any
+    ) -> None:
+        """Handle mouse events for interactive camera control.
+
+        Args:
+            event: OpenCV mouse event type
+            x, y: Mouse coordinates
+            flags: Mouse event flags
+            param: Additional parameters
+        """
+        if not self.interactive or self.current_scene_camera_pose is None:
+            return
+
+        if event == cv2.EVENT_LBUTTONDOWN:
+            # Start dragging
+            self.mouse_dragging = True
+            self.last_mouse_pos = (x, y)
+
+        elif event == cv2.EVENT_LBUTTONUP:
+            # Stop dragging
+            self.mouse_dragging = False
+            self.last_mouse_pos = None
+
+        elif (
+            event == cv2.EVENT_MOUSEMOVE
+            and self.mouse_dragging
+            and self.last_mouse_pos is not None
+        ):
+            # Handle drag for camera rotation
+            dx = x - self.last_mouse_pos[0]
+            dy = y - self.last_mouse_pos[1]
+
+            # Update camera orientation based on mouse movement
+            self._update_camera_orientation(dx, dy)
+
+            self.last_mouse_pos = (x, y)
+
+    def _update_camera_orientation(self, dx: float, dy: float) -> None:
+        """Update camera orientation based on mouse movement deltas.
+
+        Args:
+            dx: Horizontal mouse movement delta
+            dy: Vertical mouse movement delta
+        """
+        if self.current_scene_camera_pose is None:
+            return
+
+        # Create rotation quaternions for yaw (horizontal) and pitch (vertical)
+        # Mouse movement maps to camera rotation:
+        # - Horizontal movement (dx) -> yaw rotation around world Y axis
+        # - Vertical movement (dy) -> pitch rotation around camera X axis
+
+        current_pose = self.current_scene_camera_pose
+
+        # Yaw rotation (around world Y axis)
+        if abs(dx) > 0:
+            yaw_axis = np.array([0, 1, 0])  # World Y axis
+            yaw_angle = -dx * self.rotation_speed
+            yaw_quaternion = GeometryUtils.quaternion_from_axis_angle(
+                yaw_axis, yaw_angle
+            )
+            new_orientation = GeometryUtils.quaternion_multiply(
+                current_pose.quaternion, yaw_quaternion
+            )
+            current_pose.orientation_quaternion = new_orientation
+
+        # Pitch rotation (around camera X axis)
+        if abs(dy) > 0:
+            camera_x_axis = current_pose.rotation_matrix[
+                :, 0
+            ]  # X axis in world coordinates
+            pitch_angle = -dy * self.rotation_speed
+            pitch_quaternion = GeometryUtils.quaternion_from_axis_angle(
+                camera_x_axis, pitch_angle
+            )
+            new_orientation = GeometryUtils.quaternion_multiply(
+                current_pose.quaternion, pitch_quaternion
+            )
+            current_pose.orientation_quaternion = new_orientation
+
+    def _update_camera_position(self, key: int) -> None:
+        """Update camera position based on keyboard input.
+
+        Args:
+            key: OpenCV key code
+        """
+        if self.current_scene_camera_pose is None:
+            return
+
+        current_pose = self.current_scene_camera_pose
+        move_vector = np.zeros(3)
+
+        # Movement keys (WASD + QE for up/down)
+        if key == ord("w") or key == ord("W"):
+            # Move forward (along camera's Z axis)
+            move_vector = -current_pose.rotation_matrix[:, 2] * self.move_speed
+        elif key == ord("s") or key == ord("S"):
+            # Move backward (opposite to camera's Z axis)
+            move_vector = current_pose.rotation_matrix[:, 2] * self.move_speed
+        elif key == ord("a") or key == ord("A"):
+            # Move left (opposite to camera's X axis)
+            move_vector = -current_pose.rotation_matrix[:, 0] * self.move_speed
+        elif key == ord("d") or key == ord("D"):
+            # Move right (along camera's X axis)
+            move_vector = current_pose.rotation_matrix[:, 0] * self.move_speed
+        elif key == ord("q") or key == ord("Q"):
+            # Move down (opposite to world Y axis)
+            move_vector = np.array([0, -self.move_speed, 0])
+        elif key == ord("e") or key == ord("E"):
+            # Move up (along world Y axis)
+            move_vector = np.array([0, self.move_speed, 0])
+
+        # Direct axis movement (X, Y, Z)
+        elif key == ord("x") or key == ord("X"):
+            # Move along world X axis
+            move_vector = np.array([self.move_speed, 0, 0])
+        elif key == ord("y") or key == ord("Y"):
+            # Move along world Y axis
+            move_vector = np.array([0, self.move_speed, 0])
+        elif key == ord("z") or key == ord("Z"):
+            # Move along world Z axis
+            move_vector = np.array([0, 0, self.move_speed])
+
+        # Apply movement
+        if np.any(move_vector != 0):
+            current_pose.position += move_vector
 
     def project_points_to_image(
         self,
@@ -950,24 +1090,101 @@ class OpenCVSceneVisualizer:
     ) -> None:
         """Render and display the 3D scene.
 
+        When interactive mode is enabled:
+        Mouse controls:
+        - Click and drag: Rotate camera orientation
+
+        Keyboard controls:
+        - WASD: Move camera forward/backward/left/right (relative to camera view)
+        - Q/E: Move camera up/down (world coordinates)
+        - X/Y/Z: Move camera along world X/Y/Z axes
+        - ESC: Exit interactive mode
+
+        When interactive mode is disabled:
+        - Press any key to exit the static view
+
         Args:
-            camera_pose (CameraPose): Camera pose defining the viewpoint.
             scene_camera_pose (CameraPose): Camera pose defining the viewpoint.
+            camera_pose (CameraPose): Camera pose defining the camera position/orientation to visualize.
             landmarks (np.ndarray): Landmark positions in world coordinates, shape (N, 3).
             landmark_ids (Optional[List[int]]): Optional landmark IDs to display.
             window_name (str): Name of the OpenCV window.
             show_axes (bool): Whether to show coordinate axes.
         """
-        image = self.render_scene(
-            scene_camera_pose, camera_pose, landmarks, landmark_ids, show_axes
-        )
+        if self.interactive:
+            # Interactive mode: allow camera manipulation
+            self.current_scene_camera_pose = CameraPose(
+                position=scene_camera_pose.position.copy(),
+                orientation=scene_camera_pose.orientation_quaternion.copy(),
+                timestamp=scene_camera_pose.timestamp,
+            )
 
-        cv2.imshow(window_name, image)
-        cv2.waitKey(0)
+            # Create window and set mouse callback
+            cv2.namedWindow(window_name)
+            cv2.setMouseCallback(window_name, self.mouse_callback)
+
+            print("Interactive Camera Controls:")
+            print("Mouse: Click and drag to rotate camera orientation")
+            print("WASD: Move forward/backward/left/right (camera-relative)")
+            print("Q/E: Move up/down (world coordinates)")
+            print("X/Y/Z: Move along world X/Y/Z axes")
+            print("ESC: Exit")
+
+            while True:
+                # Render current scene
+                image = self.render_scene(
+                    self.current_scene_camera_pose,
+                    camera_pose,
+                    landmarks,
+                    landmark_ids,
+                    show_axes,
+                )
+
+                # Add control instructions to the image
+                instructions = [
+                    "Controls: Mouse drag to rotate | WASD+QE to move | XYZ for axis move | ESC to exit",
+                    f"Position: ({self.current_scene_camera_pose.position[0]:.2f}, {self.current_scene_camera_pose.position[1]:.2f}, {self.current_scene_camera_pose.position[2]:.2f})",
+                ]
+
+                for i, instruction in enumerate(instructions):
+                    cv2.putText(
+                        image,
+                        instruction,
+                        (10, image.shape[0] - 30 - i * 25),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (255, 255, 255),
+                        1,
+                    )
+
+                cv2.imshow(window_name, image)
+
+                # Handle keyboard input
+                key = cv2.waitKey(10) & 0xFF
+
+                if key == 27:  # ESC key
+                    break
+                elif key != 255:  # Any other key
+                    self._update_camera_position(key)
+
+        else:
+            # Static mode: show single image
+            image = self.render_scene(
+                scene_camera_pose,
+                camera_pose,
+                landmarks,
+                landmark_ids,
+                show_axes,
+            )
+
+            cv2.imshow(window_name, image)
+            cv2.waitKey(0)
+
         cv2.destroyAllWindows()
 
     def save_scene(
         self,
+        scene_camera_pose: CameraPose,
         camera_pose: CameraPose,
         landmarks: np.ndarray,
         filepath: str,
@@ -977,12 +1194,15 @@ class OpenCVSceneVisualizer:
         """Render and save the 3D scene to a file.
 
         Args:
-            camera_pose (CameraPose): Camera pose defining the viewpoint.
+            scene_camera_pose (CameraPose): Camera pose defining the viewpoint.
+            camera_pose (CameraPose): Camera pose defining the camera position/orientation to visualize.
             landmarks (np.ndarray): Landmark positions in world coordinates, shape (N, 3).
             filepath (str): Path to save the image.
             landmark_ids (Optional[List[int]]): Optional landmark IDs to display.
             show_axes (bool): Whether to show coordinate axes.
         """
-        image = self.render_scene(camera_pose, landmarks, landmark_ids, show_axes)
+        image = self.render_scene(
+            scene_camera_pose, camera_pose, landmarks, landmark_ids, show_axes
+        )
         cv2.imwrite(filepath, image)
         print(f"Scene saved to: {filepath}")
