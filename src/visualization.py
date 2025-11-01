@@ -805,6 +805,73 @@ class OpenCVSceneVisualizer:
 
         return image
 
+    def draw_coordinate_frame(
+        self,
+        image: np.ndarray,
+        scene_camera_pose: CameraPose,
+        camera_pose: CameraPose,
+        axis_length: float = 1.0,
+        thickness: int = 2,
+    ) -> np.ndarray:
+        """Draw XYZ coordinate frame axes at camera position with camera orientation.
+
+        Args:
+            image (np.ndarray): Image to draw on.
+            scene_camera_pose (CameraPose): Scene camera pose defining the viewpoint.
+            camera_pose (CameraPose): Camera pose defining the position and orientation of the frame.
+            axis_length (float): Length of each axis in world units.
+            thickness (int): Line thickness.
+
+        Returns:
+            np.ndarray: Image with coordinate frame drawn.
+        """
+        # Define axis endpoints in camera coordinates
+        origin = np.array([0.0, 0.0, 0.0])
+        x_axis_end = np.array([axis_length, 0.0, 0.0])
+        y_axis_end = np.array([0.0, axis_length, 0.0])
+        z_axis_end = np.array([0.0, 0.0, axis_length])
+
+        # Transform points from camera coordinates to world coordinates
+        origin_world = camera_pose.transform_points_camera_to_world(
+            origin.reshape(1, -1)
+        )[0]
+        x_end_world = camera_pose.transform_points_camera_to_world(
+            x_axis_end.reshape(1, -1)
+        )[0]
+        y_end_world = camera_pose.transform_points_camera_to_world(
+            y_axis_end.reshape(1, -1)
+        )[0]
+        z_end_world = camera_pose.transform_points_camera_to_world(
+            z_axis_end.reshape(1, -1)
+        )[0]
+
+        # Combine all points for projection
+        frame_points = np.array([origin_world, x_end_world, y_end_world, z_end_world])
+
+        # Project to image
+        projected = self.project_points_to_image(frame_points, scene_camera_pose)
+
+        if len(projected) < 4:
+            return image  # Not enough points visible
+
+        # Extract 2D coordinates
+        origin_2d = tuple(map(int, projected[0]))
+        x_end_2d = tuple(map(int, projected[1]))
+        y_end_2d = tuple(map(int, projected[2]))
+        z_end_2d = tuple(map(int, projected[3]))
+
+        # Draw axes with colors: X=red, Y=green, Z=blue
+        cv2.line(image, origin_2d, x_end_2d, (0, 0, 255), thickness)  # X-axis (red)
+        cv2.line(image, origin_2d, y_end_2d, (0, 255, 0), thickness)  # Y-axis (green)
+        cv2.line(image, origin_2d, z_end_2d, (255, 0, 0), thickness)  # Z-axis (blue)
+
+        # Add axis labels
+        cv2.putText(image, "X", x_end_2d, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(image, "Y", y_end_2d, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(image, "Z", z_end_2d, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+
+        return image
+
     def render_scene(
         self,
         scene_camera_pose: CameraPose,
