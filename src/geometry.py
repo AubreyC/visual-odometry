@@ -34,8 +34,7 @@ class GeometryUtils:
             norm = np.linalg.norm(vector)
             if norm == 0:
                 raise ProcessingError("Cannot normalize zero-length vector")
-            result: np.ndarray = vector / norm
-            return result
+            return vector / norm
 
         elif vector.ndim == 2:
             # Multiple vectors
@@ -46,8 +45,7 @@ class GeometryUtils:
             norms = np.linalg.norm(vector, axis=1)
             if np.any(norms == 0):
                 raise ProcessingError("Cannot normalize zero-length vectors")
-            result: np.ndarray = vector / norms[:, np.newaxis]
-            return result
+            return vector / norms[:, np.newaxis]
         else:
             raise ValidationError(f"Vector must be 1D or 2D, got {vector.ndim}D")
 
@@ -392,6 +390,70 @@ class GeometryUtils:
         return Rz @ Ry @ Rx
 
     @staticmethod
+    def quaternion_from_euler_angles(
+        euler_angles: np.ndarray, convention: str = "ZYX"
+    ) -> np.ndarray:
+        """Convert Euler angles to quaternion [w, x, y, z].
+
+        Args:
+            euler_angles (np.ndarray): Euler angles in radians [roll, pitch, yaw] for ZYX convention.
+            convention (str): Euler angle convention. Defaults to 'ZYX'.
+
+        Returns:
+            np.ndarray: Quaternion as [w, x, y, z].
+        """
+        if not isinstance(euler_angles, np.ndarray) or euler_angles.shape != (3,):
+            raise ValidationError(
+                f"euler_angles must be a numpy array of shape (3,), got {euler_angles.shape if isinstance(euler_angles, np.ndarray) else type(euler_angles)}"
+            )
+
+        if not np.all(np.isfinite(euler_angles)):
+            raise ValidationError("euler_angles must contain only finite values")
+
+        if convention != "ZYX":
+            raise ValidationError(
+                f"Only 'ZYX' convention is currently supported, got {convention}"
+            )
+
+        # Convert via rotation matrix to ensure consistency
+        rotation_matrix = GeometryUtils.rotation_matrix_from_euler_angles(
+            euler_angles, convention
+        )
+        return GeometryUtils.quaternion_from_rotation_matrix(rotation_matrix)
+
+    @staticmethod
+    def euler_angles_from_quaternion(
+        quaternion: np.ndarray, convention: str = "ZYX"
+    ) -> np.ndarray:
+        """Convert quaternion [w, x, y, z] to Euler angles.
+
+        Args:
+            quaternion (np.ndarray): Quaternion as [w, x, y, z].
+            convention (str): Euler angle convention. Defaults to 'ZYX'.
+
+        Returns:
+            np.ndarray: Euler angles in radians [roll, pitch, yaw] for ZYX convention.
+        """
+        if not isinstance(quaternion, np.ndarray) or quaternion.shape != (4,):
+            raise ValidationError(
+                f"quaternion must be a numpy array of shape (4,), got {quaternion.shape if isinstance(quaternion, np.ndarray) else type(quaternion)}"
+            )
+
+        if not np.all(np.isfinite(quaternion)):
+            raise ValidationError("quaternion must contain only finite values")
+
+        if convention != "ZYX":
+            raise ValidationError(
+                f"Only 'ZYX' convention is currently supported, got {convention}"
+            )
+
+        # Convert via rotation matrix to ensure consistency
+        rotation_matrix = GeometryUtils.rotation_matrix_from_quaternion(quaternion)
+        return GeometryUtils.euler_angles_from_rotation_matrix(
+            rotation_matrix, convention
+        )
+
+    @staticmethod
     def quaternion_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
         """Multiply two quaternions.
 
@@ -459,14 +521,11 @@ class GeometryUtils:
                 f"quaternion must be a numpy array of shape (4,), got {quaternion.shape if isinstance(quaternion, np.ndarray) else type(quaternion)}"
             )
 
-        norm_squared = np.sum(quaternion**2)
+        norm_squared: float = np.sum(quaternion**2)
         if norm_squared == 0:
             raise ProcessingError("Cannot invert zero quaternion")
 
-        result: np.ndarray = (
-            GeometryUtils.quaternion_conjugate(quaternion) / norm_squared
-        )
-        return result
+        return GeometryUtils.quaternion_conjugate(quaternion) / norm_squared
 
     @staticmethod
     def transform_points(
@@ -499,13 +558,11 @@ class GeometryUtils:
         if isinstance(rotation, np.ndarray):
             if rotation.shape == (3, 3):
                 # Rotation matrix
-                result: np.ndarray = (rotation @ points.T).T + translation
-                return result
+                return (rotation @ points.T).T + translation
             elif rotation.shape == (4,):
                 # Quaternion
                 rot_matrix = GeometryUtils.rotation_matrix_from_quaternion(rotation)
-                result: np.ndarray = (rot_matrix @ points.T).T + translation
-                return result
+                return (rot_matrix @ points.T).T + translation
             else:
                 raise ValidationError(
                     f"rotation must be shape (3, 3) or (4,), got {rotation.shape}"
@@ -534,10 +591,7 @@ class GeometryUtils:
             return False
 
         # Check determinant is 1
-        if abs(np.linalg.det(matrix) - 1.0) > atol:
-            return False
-
-        return True
+        return not abs(np.linalg.det(matrix) - 1.0) > atol
 
     @staticmethod
     def validate_quaternion(quaternion: np.ndarray, atol: float = 1e-6) -> bool:
@@ -557,5 +611,4 @@ class GeometryUtils:
             return False
 
         norm = np.linalg.norm(quaternion)
-        result: bool = abs(norm - 1.0) <= atol
-        return result
+        return bool(abs(norm - 1.0) <= atol)

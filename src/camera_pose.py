@@ -94,7 +94,7 @@ class CameraPose:
 
     @classmethod
     def from_transform_matrix(
-        cls, transform_matrix: np.ndarray, timestamp: float = 0.0
+        cls, transform_matrix: np.ndarray, timestamp: Optional[float] = None
     ) -> "CameraPose":
         """Create CameraPose from 4x4 transformation matrix.
 

@@ -1,8 +1,10 @@
 from typing import List, Optional, Tuple
 
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
+from .camera import PinHoleCamera
 from .camera_pose import CameraPose
 from .feature_observation import ImageObservations
 
@@ -24,7 +26,7 @@ class Visualizer:
         title: str = "Camera Trajectory",
         color: str = "blue",
         show_orientation: bool = True,
-        orientation_scale: float = 0.5,
+        orientation_scale: float = 0.1,
     ) -> plt.Figure:
         """Plot 3D camera trajectory.
 
@@ -83,25 +85,56 @@ class Visualizer:
         )
 
         # Show orientation arrows at regular intervals
-        if show_orientation and len(poses) > 1:
+        if show_orientation and len(poses) > 0:
             step = max(1, len(poses) // 10)  # Show orientation for ~10 poses
             for i in range(0, len(poses), step):
                 pose = poses[i]
                 pos = pose.position
 
                 # Camera forward direction (Z-axis in camera frame)
-                forward_dir = pose.rotation_matrix @ np.array([0, 0, 1])
-                forward_end = pos + forward_dir * orientation_scale
+                z_dir = pose.rotation_matrix @ np.array([0, 0, 1])
 
                 # Plot forward arrow
                 ax.quiver(
                     pos[0],
                     pos[1],
                     pos[2],
-                    forward_dir[0],
-                    forward_dir[1],
-                    forward_dir[2],
+                    z_dir[0],
+                    z_dir[1],
+                    z_dir[2],
+                    color="blue",
+                    length=orientation_scale,
+                    normalize=True,
+                )
+
+                # Camera forward direction (X-axis in camera frame)
+                x_dir = pose.rotation_matrix @ np.array([1, 0, 0])
+
+                # Plot forward arrow
+                ax.quiver(
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                    x_dir[0],
+                    x_dir[1],
+                    x_dir[2],
                     color="red",
+                    length=orientation_scale,
+                    normalize=True,
+                )
+
+                # Camera forward direction (X-axis in camera frame)
+                y_dir = pose.rotation_matrix @ np.array([0, 1, 0])
+
+                # Plot forward arrow
+                ax.quiver(
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                    y_dir[0],
+                    y_dir[1],
+                    y_dir[2],
+                    color="green",
                     length=orientation_scale,
                     normalize=True,
                 )
@@ -277,6 +310,8 @@ class Visualizer:
         self,
         landmarks: np.ndarray,
         poses: List[CameraPose],
+        show_orientation: bool = True,
+        orientation_scale: float = 0.1,
         title: str = "Scene Overview",
     ) -> plt.Figure:
         """Plot complete scene with landmarks and camera trajectory.
@@ -302,6 +337,61 @@ class Visualizer:
             alpha=0.6,
             label="Landmarks",
         )
+
+        # Show orientation arrows at regular intervals
+        if show_orientation and len(poses) > 0:
+            step = max(1, len(poses) // 10)  # Show orientation for ~10 poses
+            for i in range(0, len(poses), step):
+                pose = poses[i]
+                pos = pose.position
+
+                # Camera forward direction (Z-axis in camera frame)
+                z_dir = pose.rotation_matrix @ np.array([0, 0, 1])
+
+                # Plot forward arrow
+                ax.quiver(
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                    z_dir[0],
+                    z_dir[1],
+                    z_dir[2],
+                    color="blue",
+                    length=orientation_scale,
+                    normalize=True,
+                )
+
+                # Camera forward direction (X-axis in camera frame)
+                x_dir = pose.rotation_matrix @ np.array([1, 0, 0])
+
+                # Plot forward arrow
+                ax.quiver(
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                    x_dir[0],
+                    x_dir[1],
+                    x_dir[2],
+                    color="red",
+                    length=orientation_scale,
+                    normalize=True,
+                )
+
+                # Camera forward direction (X-axis in camera frame)
+                y_dir = pose.rotation_matrix @ np.array([0, 1, 0])
+
+                # Plot forward arrow
+                ax.quiver(
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                    y_dir[0],
+                    y_dir[1],
+                    y_dir[2],
+                    color="green",
+                    length=orientation_scale,
+                    normalize=True,
+                )
 
         # Plot trajectory
         if poses:
@@ -473,3 +563,359 @@ class Visualizer:
     def show(self) -> None:
         """Show all plots."""
         plt.show()
+
+
+class OpenCVSceneVisualizer:
+    """OpenCV-based 3D scene visualizer showing camera, landmarks, and coordinate system."""
+
+    def __init__(
+        self,
+        image_width: int = 1280,
+        image_height: int = 720,
+        background_color: Tuple[int, int, int] = (255, 255, 255),
+    ):
+        """Initialize the OpenCV scene visualizer.
+
+        Args:
+            image_width (int): Width of the visualization image.
+            image_height (int): Height of the visualization image.
+            background_color (Tuple[int, int, int]): RGB background color (0-255).
+        """
+        self.image_width = image_width
+        self.image_height = image_height
+        self.background_color = background_color
+
+        # Camera intrinsic parameters for scene visualization
+        self.scene_camera = PinHoleCamera(
+            fx=800.0,
+            fy=800.0,
+            cx=image_width / 2,
+            cy=image_height / 2,
+        )
+
+    def project_points_to_image(
+        self,
+        points_3d: np.ndarray,
+        camera_pose: CameraPose,
+    ) -> np.ndarray:
+        """Project 3D world points to 2D image coordinates using camera pose.
+
+        Args:
+            points_3d (np.ndarray): 3D points in world coordinates, shape (N, 3).
+            camera_pose (CameraPose): Camera pose defining the view.
+
+        Returns:
+            np.ndarray: 2D image coordinates, shape (N, 2). Points behind camera are filtered out.
+        """
+        # Transform points from world to camera coordinates
+        points_camera = camera_pose.transform_points_world_to_camera(points_3d)
+
+        # Filter points in front of camera (positive Z)
+        valid_mask = points_camera[:, 2] > 0
+        points_camera_valid = points_camera[valid_mask]
+
+        if len(points_camera_valid) == 0:
+            return np.empty((0, 2))
+
+        # Project to image plane
+        points_2d = self.scene_camera.project(points_camera_valid)
+
+        # Filter points within image bounds
+        u_coords, v_coords = points_2d[:, 0], points_2d[:, 1]
+        image_mask = (
+            (u_coords >= 0)
+            & (u_coords < self.image_width)
+            & (v_coords >= 0)
+            & (v_coords < self.image_height)
+        )
+
+        return points_2d[image_mask]
+
+    def draw_coordinate_axes(
+        self,
+        image: np.ndarray,
+        camera_pose: CameraPose,
+        axis_length: float = 1.0,
+        thickness: int = 2,
+    ) -> np.ndarray:
+        """Draw coordinate axes (X=red, Y=green, Z=blue) in the scene.
+
+        Args:
+            image (np.ndarray): Image to draw on.
+            camera_pose (CameraPose): Camera pose defining the view.
+            axis_length (float): Length of each axis in world units.
+            thickness (int): Line thickness.
+
+        Returns:
+            np.ndarray: Image with coordinate axes drawn.
+        """
+        # Define axis endpoints in world coordinates
+        origin = np.array([0.0, 0.0, 0.0])
+        x_axis = np.array([axis_length, 0.0, 0.0])
+        y_axis = np.array([0.0, axis_length, 0.0])
+        z_axis = np.array([0.0, 0.0, axis_length])
+
+        axes_points = np.array([origin, x_axis, y_axis, z_axis])
+
+        # Project to image
+        projected = self.project_points_to_image(axes_points, camera_pose)
+
+        if len(projected) < 4:
+            return image  # Not enough points visible
+
+        # Draw axes
+        origin_2d = tuple(map(int, projected[0]))
+        x_end_2d = tuple(map(int, projected[1]))
+        y_end_2d = tuple(map(int, projected[2]))
+        z_end_2d = tuple(map(int, projected[3]))
+
+        # X-axis (red)
+        cv2.line(image, origin_2d, x_end_2d, (0, 0, 255), thickness)
+        # Y-axis (green)
+        cv2.line(image, origin_2d, y_end_2d, (0, 255, 0), thickness)
+        # Z-axis (blue)
+        cv2.line(image, origin_2d, z_end_2d, (255, 0, 0), thickness)
+
+        # Add axis labels
+        cv2.putText(image, "X", x_end_2d, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        cv2.putText(image, "Y", y_end_2d, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(image, "Z", z_end_2d, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+
+        return image
+
+    def draw_landmarks(
+        self,
+        image: np.ndarray,
+        landmarks: np.ndarray,
+        camera_pose: CameraPose,
+        cross_size: int = 10,
+        color: Tuple[int, int, int] = (0, 0, 255),
+        thickness: int = 2,
+        landmark_ids: Optional[List[int]] = None,
+    ) -> np.ndarray:
+        """Draw landmarks as crosses in the scene.
+
+        Args:
+            image (np.ndarray): Image to draw on.
+            landmarks (np.ndarray): Landmark positions in world coordinates, shape (N, 3).
+            camera_pose (CameraPose): Camera pose defining the view.
+            cross_size (int): Size of the cross in pixels.
+            color (Tuple[int, int, int]): RGB color for landmarks.
+            thickness (int): Line thickness.
+            landmark_ids (Optional[List[int]]): Optional landmark IDs to display.
+
+        Returns:
+            np.ndarray: Image with landmarks drawn.
+        """
+        # Project landmarks to image
+        projected = self.project_points_to_image(landmarks, camera_pose)
+
+        for i, point_2d in enumerate(projected):
+            u, v = map(int, point_2d)
+
+            # Draw cross
+            cv2.line(image, (u - cross_size, v), (u + cross_size, v), color, thickness)
+            cv2.line(image, (u, v - cross_size), (u, v + cross_size), color, thickness)
+
+            # Draw landmark ID if provided
+            if landmark_ids is not None and i < len(landmark_ids):
+                cv2.putText(
+                    image,
+                    str(landmark_ids[i]),
+                    (u + cross_size + 5, v - cross_size - 5),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    color,
+                    1,
+                )
+
+        return image
+
+    def draw_camera_pyramid(
+        self,
+        image: np.ndarray,
+        scene_camera_pose: CameraPose,
+        camera_pose: CameraPose,
+        pyramid_length: float = 1.0,
+        color: Tuple[int, int, int] = (255, 0, 0),
+        thickness: int = 2,
+    ) -> np.ndarray:
+        """Draw camera pyramid with apex at camera location and base along Z axis.
+
+        Args:
+            image (np.ndarray): Image to draw on.
+            scene_camera_pose (CameraPose): Scene camera pose defining the viewpoint.
+            camera_pose (CameraPose): Camera pose to visualize.
+            pyramid_length (float): Length of pyramid from camera along Z axis.
+            color (Tuple[int, int, int]): RGB color for pyramid.
+            thickness (int): Line thickness.
+
+        Returns:
+            np.ndarray: Image with camera pyramid drawn.
+        """
+
+        # Camera position (apex of pyramid)
+        camera_pos = camera_pose.position
+
+        # Define pyramid base corners in camera coordinates (at pyramid_length distance along Z)
+        # Camera looks along +Z axis, base is at pyramid_length
+        half_width = pyramid_length * (self.scene_camera.cx / self.scene_camera.fx)
+        half_height = pyramid_length * (self.scene_camera.cy / self.scene_camera.fy)
+
+        pyramid_base_corners_camera = np.array(
+            [
+                [half_width, half_height, pyramid_length],  # top-right
+                [-half_width, half_height, pyramid_length],  # top-left
+                [-half_width, -half_height, pyramid_length],  # bottom-left
+                [half_width, -half_height, pyramid_length],  # bottom-right
+            ]
+        )
+
+        # Transform base corners to world coordinates
+        pyramid_base_corners_world = camera_pose.transform_points_camera_to_world(
+            pyramid_base_corners_camera
+        )
+
+        # Add camera position (apex) to the points
+        all_points = np.vstack([camera_pos.reshape(1, -1), pyramid_base_corners_world])
+
+        # Project to image
+        projected = self.project_points_to_image(all_points, scene_camera_pose)
+
+        if len(projected) < 5:
+            return image  # Not enough points visible
+
+        camera_pos_2d = tuple(map(int, projected[0]))
+        base_corners_2d = [tuple(map(int, pt)) for pt in projected[1:]]
+
+        # Draw pyramid edges from apex (camera position) to base corners
+        for corner_2d in base_corners_2d:
+            cv2.line(image, camera_pos_2d, corner_2d, color, thickness)
+
+        # Draw pyramid base (rectangle connecting the base corners)
+        if len(base_corners_2d) == 4:
+            cv2.line(image, base_corners_2d[0], base_corners_2d[1], color, thickness)
+            cv2.line(image, base_corners_2d[1], base_corners_2d[2], color, thickness)
+            cv2.line(image, base_corners_2d[2], base_corners_2d[3], color, thickness)
+            cv2.line(image, base_corners_2d[3], base_corners_2d[0], color, thickness)
+
+        # Draw camera position (apex) as a circle
+        cv2.circle(image, camera_pos_2d, 8, color, -1)  # Filled circle
+        cv2.circle(image, camera_pos_2d, 8, (255, 255, 255), 2)  # White border
+
+        return image
+
+    def render_scene(
+        self,
+        scene_camera_pose: CameraPose,
+        camera_pose: CameraPose,
+        landmarks: np.ndarray,
+        landmark_ids: Optional[List[int]] = None,
+        show_axes: bool = True,
+        show_grid: bool = False,
+    ) -> np.ndarray:
+        """Render the complete 3D scene from the camera's viewpoint.
+
+        Args:
+            scene_camera_pose (CameraPose): Camera pose defining the viewpoint.
+            camera_pose (CameraPose): Camera pose defining the camera position/orientation.
+            landmarks (np.ndarray): Landmark positions in world coordinates, shape (N, 3).
+            landmark_ids (Optional[List[int]]): Optional landmark IDs to display.
+            show_axes (bool): Whether to show coordinate axes.
+            show_grid (bool): Whether to show a reference grid (not implemented yet).
+
+        Returns:
+            np.ndarray: Rendered scene image.
+        """
+        # Create background image
+        image = np.full(
+            (self.image_height, self.image_width, 3),
+            self.background_color,
+            dtype=np.uint8,
+        )
+
+        # # Draw coordinate axes
+        # if show_axes:
+        #     image = self.draw_coordinate_axes(image, scene_camera_pose)
+
+        # Draw landmarks
+        image = self.draw_landmarks(
+            image, landmarks, scene_camera_pose, landmark_ids=landmark_ids
+        )
+
+        # Draw camera pyramid (representing the viewing camera)
+        image = self.draw_camera_pyramid(image, scene_camera_pose, camera_pose)
+
+        # Add info text
+        cv2.putText(
+            image,
+            f"Camera Position: ({camera_pose.position[0]:.2f}, {camera_pose.position[1]:.2f}, {camera_pose.position[2]:.2f})",
+            (10, 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 255),
+            2,
+        )
+
+        num_visible_landmarks = len(
+            self.project_points_to_image(landmarks, camera_pose)
+        )
+        cv2.putText(
+            image,
+            f"Visible Landmarks: {num_visible_landmarks}/{len(landmarks)}",
+            (10, 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 255),
+            2,
+        )
+
+        return image
+
+    def show_scene(
+        self,
+        scene_camera_pose: CameraPose,
+        camera_pose: CameraPose,
+        landmarks: np.ndarray,
+        landmark_ids: Optional[List[int]] = None,
+        window_name: str = "3D Scene Visualizer",
+        show_axes: bool = True,
+    ) -> None:
+        """Render and display the 3D scene.
+
+        Args:
+            camera_pose (CameraPose): Camera pose defining the viewpoint.
+            scene_camera_pose (CameraPose): Camera pose defining the viewpoint.
+            landmarks (np.ndarray): Landmark positions in world coordinates, shape (N, 3).
+            landmark_ids (Optional[List[int]]): Optional landmark IDs to display.
+            window_name (str): Name of the OpenCV window.
+            show_axes (bool): Whether to show coordinate axes.
+        """
+        image = self.render_scene(
+            scene_camera_pose, camera_pose, landmarks, landmark_ids, show_axes
+        )
+
+        cv2.imshow(window_name, image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    def save_scene(
+        self,
+        camera_pose: CameraPose,
+        landmarks: np.ndarray,
+        filepath: str,
+        landmark_ids: Optional[List[int]] = None,
+        show_axes: bool = True,
+    ) -> None:
+        """Render and save the 3D scene to a file.
+
+        Args:
+            camera_pose (CameraPose): Camera pose defining the viewpoint.
+            landmarks (np.ndarray): Landmark positions in world coordinates, shape (N, 3).
+            filepath (str): Path to save the image.
+            landmark_ids (Optional[List[int]]): Optional landmark IDs to display.
+            show_axes (bool): Whether to show coordinate axes.
+        """
+        image = self.render_scene(camera_pose, landmarks, landmark_ids, show_axes)
+        cv2.imwrite(filepath, image)
+        print(f"Scene saved to: {filepath}")
