@@ -92,22 +92,6 @@ class Visualizer:
                 pose = poses[i]
                 pos = pose.position
 
-                # Camera forward direction (Z-axis in camera frame)
-                z_dir = pose.rotation_matrix @ np.array([0, 0, 1])
-
-                # Plot forward arrow
-                ax.quiver(
-                    pos[0],
-                    pos[1],
-                    pos[2],
-                    z_dir[0],
-                    z_dir[1],
-                    z_dir[2],
-                    color="blue",
-                    length=orientation_scale,
-                    normalize=True,
-                )
-
                 # Camera forward direction (X-axis in camera frame)
                 x_dir = pose.rotation_matrix @ np.array([1, 0, 0])
 
@@ -136,6 +120,22 @@ class Visualizer:
                     y_dir[1],
                     y_dir[2],
                     color="green",
+                    length=orientation_scale,
+                    normalize=True,
+                )
+
+                # Camera forward direction (Z-axis in camera frame)
+                z_dir = pose.rotation_matrix @ np.array([0, 0, 1])
+
+                # Plot forward arrow
+                ax.quiver(
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                    z_dir[0],
+                    z_dir[1],
+                    z_dir[2],
+                    color="blue",
                     length=orientation_scale,
                     normalize=True,
                 )
@@ -346,22 +346,6 @@ class Visualizer:
                 pose = poses[i]
                 pos = pose.position
 
-                # Camera forward direction (Z-axis in camera frame)
-                z_dir = pose.rotation_matrix @ np.array([0, 0, 1])
-
-                # Plot forward arrow
-                ax.quiver(
-                    pos[0],
-                    pos[1],
-                    pos[2],
-                    z_dir[0],
-                    z_dir[1],
-                    z_dir[2],
-                    color="blue",
-                    length=orientation_scale,
-                    normalize=True,
-                )
-
                 # Camera forward direction (X-axis in camera frame)
                 x_dir = pose.rotation_matrix @ np.array([1, 0, 0])
 
@@ -390,6 +374,22 @@ class Visualizer:
                     y_dir[1],
                     y_dir[2],
                     color="green",
+                    length=orientation_scale,
+                    normalize=True,
+                )
+
+                # Camera forward direction (Z-axis in camera frame)
+                z_dir = pose.rotation_matrix @ np.array([0, 0, 1])
+
+                # Plot forward arrow
+                ax.quiver(
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                    z_dir[0],
+                    z_dir[1],
+                    z_dir[2],
+                    color="blue",
                     length=orientation_scale,
                     normalize=True,
                 )
@@ -431,6 +431,10 @@ class Visualizer:
         ax.set_title(title)
         ax.legend()
         ax.grid(True)
+
+        ax.set_xlim(-50, 50)  # Set x-axis
+        ax.set_ylim(-50, 50)  # Set y-axis
+        ax.set_zlim(-50, 50)  # Set z-axis
 
         return fig
 
@@ -574,7 +578,7 @@ class OpenCVSceneVisualizer:
         image_width: int = 1280,
         image_height: int = 720,
         background_color: Tuple[int, int, int] = (255, 255, 255),
-        interactive: bool = True,
+        interactive: bool = False,
     ):
         """Initialize the OpenCV scene visualizer.
 
@@ -1041,9 +1045,9 @@ class OpenCVSceneVisualizer:
             dtype=np.uint8,
         )
 
-        # # Draw coordinate axes
-        # if show_axes:
-        #     image = self.draw_coordinate_axes(image, scene_camera_pose)
+        # Draw coordinate axes
+        if show_axes:
+            image = self.draw_coordinate_axes(image, scene_camera_pose)
 
         # Draw landmarks
         image = self.draw_landmarks(

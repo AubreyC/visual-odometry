@@ -63,6 +63,8 @@ class CameraPose:
             np.ndarray: Points in camera frame, shape (N, 3).
         """
         # First translate, then rotate
+        # Note: rotation_matrix is the rotation matrix from world to camera frame
+        # so we R_CF_I (rotation frame matrix is the transpose of the rotation matrix)
         points_relative = points_world - self.position
         return points_relative @ self.rotation_matrix  # (p - t) * R
 

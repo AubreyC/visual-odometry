@@ -6,7 +6,16 @@ from .validation_error import ProcessingError, ValidationError
 
 
 class PinHoleCamera:
-    def __init__(self, fx: float, fy: float, cx: float, cy: float, k1: float = 0.0, k2: float = 0.0, k3: float = 0.0):
+    def __init__(
+        self,
+        fx: float,
+        fy: float,
+        cx: float,
+        cy: float,
+        k1: float = 0.0,
+        k2: float = 0.0,
+        k3: float = 0.0,
+    ):
         """Initialize the camera with intrinsic parameters.
 
         Args:
@@ -108,7 +117,12 @@ class PinHoleCamera:
             r = np.sqrt(r_squared)
 
             # Apply radial distortion formula: r_distorted = r * (1 + k1*r^2 + k2*r^4 + k3*r^6)
-            distortion_factor = 1.0 + self.k1 * r_squared + self.k2 * r_squared**2 + self.k3 * r_squared**3
+            distortion_factor = (
+                1.0
+                + self.k1 * r_squared
+                + self.k2 * r_squared**2
+                + self.k3 * r_squared**3
+            )
 
             # Avoid division by zero for points at optical center
             r_distorted = r * distortion_factor
@@ -167,7 +181,12 @@ class PinHoleCamera:
             r = np.sqrt(r_squared)
 
             # Apply distortion formula to current estimate
-            distortion_factor = 1.0 + self.k1 * r_squared + self.k2 * r_squared**2 + self.k3 * r_squared**3
+            distortion_factor = (
+                1.0
+                + self.k1 * r_squared
+                + self.k2 * r_squared**2
+                + self.k3 * r_squared**3
+            )
 
             # Calculate correction
             r_distorted = r * distortion_factor
@@ -184,7 +203,9 @@ class PinHoleCamera:
         u_undistorted = (self.fx * x_norm) + self.cx
         v_undistorted = (self.fy * y_norm) + self.cy
 
-        result: np.ndarray[np.Any, np.dtype[np.float64]] = np.vstack((u_undistorted, v_undistorted)).T
+        result: np.ndarray[np.Any, np.dtype[np.float64]] = np.vstack(
+            (u_undistorted, v_undistorted)
+        ).T
         return result
 
     def unproject(
@@ -257,4 +278,14 @@ class PinHoleCamera:
         x = ((u - self.cx) * depths) / self.fx
         y = ((v - self.cy) * depths) / self.fy
         result: np.ndarray[np.Any, np.dtype[np.float64]] = np.vstack((x, y, depths)).T
+        return result
+
+    def get_camera_matrix(self) -> np.ndarray:
+        result = np.array(
+            [[self.fx, 0.0, self.cx], [0.0, self.fy, self.cy], [0.0, 0.0, 1.0]]
+        )
+        return result
+
+    def get_distortion_coefficients(self) -> np.ndarray:
+        result = np.array([self.k1, self.k2, self.k3])
         return result
