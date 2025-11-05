@@ -594,6 +594,25 @@ class GeometryUtils:
         return not abs(np.linalg.det(matrix) - 1.0) > atol
 
     @staticmethod
+    def validate_3d_point(pt_3d: np.ndarray) -> None:
+        """Validate 3D point
+
+        Args:
+            pt_3d (np.ndarray): 3x1 array of 3D point
+
+        Raises:
+            ValidationError: If pt_3d are invalid.
+        """
+
+        if (
+            not isinstance(pt_3d, np.ndarray)
+            or pt_3d.ndim != 2
+            or pt_3d.shape[0] != 3
+            or pt_3d.shape[1] != 1
+        ):
+            raise ValidationError(f"pts3d must be 3x1 array, got shape {pt_3d.shape}")
+
+    @staticmethod
     def validate_quaternion(quaternion: np.ndarray, atol: float = 1e-6) -> bool:
         """Validate if array represents a unit quaternion.
 
