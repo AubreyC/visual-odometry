@@ -20,7 +20,9 @@ class TestPinHoleCamera:
 
     def test_valid_initialization_with_distortion(self) -> None:
         """Test valid camera initialization with distortion coefficients."""
-        camera = PinHoleCamera(fx=500.0, fy=600.0, cx=320.0, cy=240.0, k1=-0.1, k2=0.01, k3=-0.001)
+        camera = PinHoleCamera(
+            fx=500.0, fy=600.0, cx=320.0, cy=240.0, k1=-0.1, k2=0.01, k3=-0.001
+        )
         assert camera.fx == 500.0
         assert camera.fy == 600.0
         assert camera.cx == 320.0
@@ -69,7 +71,8 @@ class TestPinHoleCamera:
     def test_invalid_distortion_k1(self, invalid_k1: float) -> None:
         """Test invalid distortion coefficient k1 raises ValidationError."""
         with pytest.raises(
-            ValidationError, match=r"Radial distortion coefficient k1 must be a finite number.*"
+            ValidationError,
+            match=r"Radial distortion coefficient k1 must be a finite number.*",
         ):
             PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=invalid_k1)
 
@@ -77,7 +80,8 @@ class TestPinHoleCamera:
     def test_invalid_distortion_k2(self, invalid_k2: float) -> None:
         """Test invalid distortion coefficient k2 raises ValidationError."""
         with pytest.raises(
-            ValidationError, match=r"Radial distortion coefficient k2 must be a finite number.*"
+            ValidationError,
+            match=r"Radial distortion coefficient k2 must be a finite number.*",
         ):
             PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k2=invalid_k2)
 
@@ -85,7 +89,8 @@ class TestPinHoleCamera:
     def test_invalid_distortion_k3(self, invalid_k3: float) -> None:
         """Test invalid distortion coefficient k3 raises ValidationError."""
         with pytest.raises(
-            ValidationError, match=r"Radial distortion coefficient k3 must be a finite number.*"
+            ValidationError,
+            match=r"Radial distortion coefficient k3 must be a finite number.*",
         ):
             PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k3=invalid_k3)
 
@@ -292,8 +297,12 @@ class TestPinHoleCamera:
     def test_projection_with_distortion(self) -> None:
         """Test 3D point projection with radial distortion."""
         # Camera with barrel distortion (k1 > 0)
-        camera = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.1, k2=0.01, k3=0.001)
-        points_3d = np.array([[1.0, 0.0, 1.0], [0.0, 1.0, 1.0]])  # Points at unit distance from center
+        camera = PinHoleCamera(
+            fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.1, k2=0.01, k3=0.001
+        )
+        points_3d = np.array(
+            [[1.0, 0.0, 1.0], [0.0, 1.0, 1.0]]
+        )  # Points at unit distance from center
 
         projected = camera.project(points_3d)
 
@@ -305,14 +314,20 @@ class TestPinHoleCamera:
 
         # Points should be further from optical center due to barrel distortion
         center_u, center_v = 320.0, 240.0
-        distances = np.sqrt((projected[:, 0] - center_u)**2 + (projected[:, 1] - center_v)**2)
-        expected_distances_no_distortion = np.sqrt((570.0 - 320.0)**2 + (490.0 - 240.0)**2)  # ~250 for both
+        distances = np.sqrt(
+            (projected[:, 0] - center_u) ** 2 + (projected[:, 1] - center_v) ** 2
+        )
+        expected_distances_no_distortion = np.sqrt(
+            (570.0 - 320.0) ** 2 + (490.0 - 240.0) ** 2
+        )  # ~250 for both
         assert distances[0] > 250.0  # Should be larger due to distortion
         assert distances[1] > 250.0
 
     def test_projection_no_distortion_when_coeffs_zero(self) -> None:
         """Test that projection behaves the same with zero distortion coefficients."""
-        camera_no_distortion = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.0, k2=0.0, k3=0.0)
+        camera_no_distortion = PinHoleCamera(
+            fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.0, k2=0.0, k3=0.0
+        )
         camera_default = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0)
 
         points_3d = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
@@ -334,7 +349,9 @@ class TestPinHoleCamera:
 
     def test_undistort_with_distortion(self) -> None:
         """Test undistort method with distortion coefficients."""
-        camera = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.1, k2=0.01, k3=0.001)
+        camera = PinHoleCamera(
+            fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.1, k2=0.01, k3=0.001
+        )
 
         # Create some distorted points
         points_3d = np.array([[0.5, 0.3, 1.0], [-0.2, 0.4, 1.0]])
@@ -344,7 +361,11 @@ class TestPinHoleCamera:
         undistorted_points = camera.undistort(distorted_points)
 
         # Should be close to original (allowing for numerical precision)
-        np.testing.assert_allclose(undistorted_points, points_3d[:, :2] * np.array([500.0, 500.0]) + np.array([320.0, 240.0]), rtol=1e-3)
+        np.testing.assert_allclose(
+            undistorted_points,
+            points_3d[:, :2] * np.array([500.0, 500.0]) + np.array([320.0, 240.0]),
+            rtol=1e-3,
+        )
 
     def test_undistort_invalid_input(self) -> None:
         """Test undistort method with invalid input."""
@@ -363,5 +384,140 @@ class TestPinHoleCamera:
             camera.undistort(np.empty((0, 2)))
 
         # Test with non-finite values
-        with pytest.raises(ValidationError, match="points_2d must contain only finite values"):
+        with pytest.raises(
+            ValidationError, match="points_2d must contain only finite values"
+        ):
             camera.undistort(np.array([[float("nan"), 240.0]]))
+
+    def test_distortion_affects_projection(self) -> None:
+        """Test that radial distortion affects 3D point projection."""
+        # Create camera with barrel distortion (k1 > 0)
+        camera_distorted = PinHoleCamera(
+            fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.1, k2=0.01, k3=0.001
+        )
+
+        # Create camera without distortion for comparison
+        camera_no_distortion = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0)
+
+        # Test points at different distances from center
+        test_points_3d = np.array(
+            [
+                [1.0, 0.0, 1.0],  # Point on x-axis at distance 1
+                [0.0, 1.0, 1.0],  # Point on y-axis at distance 1
+                [0.707, 0.707, 1.0],  # Point at 45 degrees, distance ~1
+            ]
+        )
+
+        projected_no_distortion = camera_no_distortion.project(test_points_3d)
+        projected_distortion = camera_distorted.project(test_points_3d)
+
+        # For all test points, distorted projection should be further from center
+        for i in range(len(test_points_3d)):
+            u_no_dist, v_no_dist = projected_no_distortion[i]
+            u_dist, v_dist = projected_distortion[i]
+
+            distance_no_dist = np.sqrt(
+                (u_no_dist - 320.0) ** 2 + (v_no_dist - 240.0) ** 2
+            )
+            distance_dist = np.sqrt((u_dist - 320.0) ** 2 + (v_dist - 240.0) ** 2)
+
+            # Barrel distortion (k1 > 0) should push points further from center
+            assert distance_dist > distance_no_dist, (
+                f"Point {i + 1} should be further from center with distortion"
+            )
+
+    def test_distortion_magnitude_increases_with_distance(self) -> None:
+        """Test that distortion magnitude increases with distance from optical center."""
+        camera_distorted = PinHoleCamera(
+            fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.1, k2=0.01, k3=0.001
+        )
+
+        camera_no_distortion = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0)
+
+        # Test points at different distances from center
+        test_points_3d = np.array(
+            [
+                [0.0, 0.0, 1.0],  # Point at optical center (distance 0)
+                [0.5, 0.0, 1.0],  # Point at distance 0.5
+                [1.0, 0.0, 1.0],  # Point at distance 1.0
+            ]
+        )
+
+        projected_no_distortion = camera_no_distortion.project(test_points_3d)
+        projected_distortion = camera_distorted.project(test_points_3d)
+
+        # Calculate distortion amounts (difference from undistorted projection)
+        distortions = []
+        for i in range(len(test_points_3d)):
+            u_no_dist, v_no_dist = projected_no_distortion[i]
+            u_dist, v_dist = projected_distortion[i]
+
+            distance_no_dist = np.sqrt(
+                (u_no_dist - 320.0) ** 2 + (v_no_dist - 240.0) ** 2
+            )
+            distance_dist = np.sqrt((u_dist - 320.0) ** 2 + (v_dist - 240.0) ** 2)
+
+            distortion_amount = distance_dist - distance_no_dist
+            distortions.append(distortion_amount)
+
+        # Distortion should increase with distance from center
+        assert distortions[0] < distortions[1], (
+            "Distortion should increase with distance from center"
+        )
+        assert distortions[1] < distortions[2], (
+            "Distortion should increase with distance from center"
+        )
+
+    def test_undistortion_corrects_distortion(self) -> None:
+        """Test that undistortion method correctly reverses distortion."""
+        camera_distorted = PinHoleCamera(
+            fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.1, k2=0.01, k3=0.001
+        )
+
+        camera_no_distortion = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0)
+
+        # Test points at different distances from center
+        test_points_3d = np.array(
+            [
+                [1.0, 0.0, 1.0],  # Point on x-axis at distance 1
+                [0.0, 1.0, 1.0],  # Point on y-axis at distance 1
+                [0.707, 0.707, 1.0],  # Point at 45 degrees, distance ~1
+            ]
+        )
+
+        # Project without distortion to get "ground truth"
+        projected_no_distortion = camera_no_distortion.project(test_points_3d)
+
+        # Project with distortion, then undistort
+        projected_distortion = camera_distorted.project(test_points_3d)
+        undistorted = camera_distorted.undistort(projected_distortion)
+
+        # Undistorted points should match original undistorted projection
+        np.testing.assert_allclose(
+            undistorted,
+            projected_no_distortion,
+            rtol=1e-3,
+            err_msg="Undistortion should recover original undistorted projection",
+        )
+
+    def test_optical_center_not_affected_by_distortion(self) -> None:
+        """Test that the optical center is not affected by radial distortion."""
+        camera_distorted = PinHoleCamera(
+            fx=500.0, fy=500.0, cx=320.0, cy=240.0, k1=0.1, k2=0.01, k3=0.001
+        )
+
+        camera_no_distortion = PinHoleCamera(fx=500.0, fy=500.0, cx=320.0, cy=240.0)
+
+        # Point at optical center (looking straight ahead)
+        optical_center_3d = np.array([[0.0, 0.0, 1.0]])
+
+        projected_no_distortion = camera_no_distortion.project(optical_center_3d)
+        projected_distortion = camera_distorted.project(optical_center_3d)
+
+        # Optical center should project to the same point regardless of distortion
+        np.testing.assert_allclose(
+            projected_distortion,
+            projected_no_distortion,
+            rtol=1e-10,
+            err_msg="Optical center should not be affected by radial distortion",
+        )
