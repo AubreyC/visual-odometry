@@ -11,6 +11,12 @@ MIN_FEATURES = 70  # minimum features before re-detection
 MAX_FEATURES = 150  # max ORB features per detection
 MIN_DISTANCE = 10.0  # minimum distance to existing points
 
+LK_PARAMS = {
+    "winSize": (21, 21),
+    "maxLevel": 3,
+    "criteria": (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01),
+}
+
 
 class FeatureTracker:
     """Feature detection and tracking algorithms for visual odometry."""
@@ -97,7 +103,44 @@ class FeatureTracker:
         )
         return optimal_keypoints, descriptors, selection_mask
 
-    def validate_image_input(self, image: np.ndarray) -> None:
+    @classmethod
+    def validate_features_input(cls, features: np.ndarray) -> None:
+        """Validate the features.
+
+        Args:
+            features: Nx2 array of feature coordinates.
+
+        Raises:
+            ValidationError: If inputs are invalid.
+        """
+        if (
+            not isinstance(features, np.ndarray)
+            or features.ndim != 2
+            or features.shape[1] != 2
+        ):
+            raise ValidationError(
+                f"features must be Nx2 array, got shape {features.shape}"
+            )
+
+    @classmethod
+    def validate_features_ids(cls, features_id: List[int]) -> None:
+        """_summary_
+
+        Args:
+            features_id (List[int]): _description_
+
+        Raises:
+            ValidationError: _description_
+        """
+        if not isinstance(features_id, list) or not all(
+            isinstance(id, int) for id in features_id
+        ):
+            raise ValidationError(
+                f"Features IDs must be a list of integers, got {features_id}"
+            )
+
+    @classmethod
+    def validate_image_input(cls, image: np.ndarray) -> None:
         """Validate the image.
 
         Args:
@@ -197,8 +240,8 @@ class FeatureTracker:
 
         try:
             curr_points, status, err = cv2.calcOpticalFlowPyrLK(
-                prev_image, curr_image, prev_points, None
-            )
+                prev_image, curr_image, prev_points, None, **LK_PARAMS
+            )  # type: ignore
         except Exception as e:
             raise ProcessingError(f"KLT optical flow tracking failed: {e}") from e
 
@@ -225,24 +268,6 @@ class FeatureTracker:
         )
 
         return filtered_new_pts
-
-    def validate_features_input(self, features: np.ndarray) -> None:
-        """Validate the features.
-
-        Args:
-            features: Nx2 array of feature coordinates.
-
-        Raises:
-            ValidationError: If inputs are invalid.
-        """
-        if (
-            not isinstance(features, np.ndarray)
-            or features.ndim != 2
-            or features.shape[1] != 2
-        ):
-            raise ValidationError(
-                f"features must be Nx2 array, got shape {features.shape}"
-            )
 
     def filter_features_by_region_with_mask(
         self,

@@ -9,15 +9,45 @@ from .feature_observation import FeatureObservation, ImageObservations
 from .geometry import GeometryUtils
 from .image_renderer import ImageRenderer
 from .landmarks import LandmarkGenerator
+from .visual_odometry import VisualOdometry
 from .visualization import OpenCVSceneVisualizer, Visualizer
 
 
 def main() -> None:
     # Generate landmarks and poses
-    landmarks_generator: LandmarkGenerator = LandmarkGenerator()
-    landmarks: np.ndarray = landmarks_generator.generate_random(
-        num_landmarks=500, seed=42
+    landmarks_generator: LandmarkGenerator = LandmarkGenerator(
+        (2.0, 2.1), (-0.5, 0.5), (-0.5, 0.5)
     )
+    landmarks_3d: np.ndarray = landmarks_generator.generate_random(
+        num_landmarks=20, seed=42
+    )
+
+    # landmarks_3d: np.ndarray = np.array(
+    #     [
+    #         [2.0, 0.5, 0.1],
+    #         [2.0, 0.4, 0.2],
+    #         [2.0, -0.3, 0.4],
+    #         [2.0, 0.3, 0.4],
+    #         [2.0, 0.1, 0.0],
+    #         [2.0, -0.2, -0.25],
+    #         [2.0, -0.4, -0.5],
+    #         [2.0, 0.5, -0.2],
+    #     ]
+    # )
+    # landmarks_3d = np.array(
+    #     [
+    #         [2.0773956, -0.37188637, 0.05458479],
+    #         [2.04388784, -0.04961406, -0.43618274],
+    #         [2.08585979, -0.12920198, 0.32763117],
+    #         [2.0697368, 0.42676499, 0.1316644],
+    #         [2.00941773, 0.14386512, 0.25808774],
+    #         [2.09756224, 0.32276161, -0.14547403],
+    #         [2.07611397, -0.0565858, 0.47069802],
+    #         [2.07860643, -0.27276128, 0.39312112],
+    #     ]
+    # )
+    landmarks = landmarks_3d.copy()
+    print("landmarks:\n", landmarks)
 
     # This is so that the camera is looking at toward the X world axis
     quat_cam = GeometryUtils.quaternion_from_euler_angles(
@@ -147,14 +177,22 @@ def main() -> None:
             show_axes=True,
         )
 
-    cur_R = np.eye(3)
-    cur_t = np.zeros(3)
-    cur_t_truth = np.zeros(3)
-    timestamp = 0.0
-
     prev_list = None
     prev_pose = None
-    for pose in poses:
+
+    initial_pose = CameraPose(
+        position=np.array([0.0, 0.0, 0.0]),
+        orientation=GeometryUtils.quaternion_from_euler_angles(
+            np.array([0.0, 0.0, 0.0])
+        ),
+        timestamp=0.0,
+    )
+    visual_odometry: VisualOdometry = VisualOdometry(initial_pose=initial_pose)
+
+    current_pos_truth = poses[0].position
+    current_rot_truth = poses[0].rotation_matrix
+
+    for frame_idx, pose in enumerate(poses):
         list_of_observations: List[FeatureObservation] = (
             image_renderer.project_landmarks_to_image(landmarks, pose)
         )
@@ -168,59 +206,52 @@ def main() -> None:
         )
 
         if prev_list is not None:
-            id_prev = [feature.landmark_id for feature in prev_list]
-            id_curr = [feature.landmark_id for feature in list_of_observations]
+            print(f"\nProcessing visual odometry: {frame_idx}")
+            previous_ids = [feature.landmark_id for feature in prev_list]
+            current_ids = [feature.landmark_id for feature in list_of_observations]
 
-            ids = list(filter(lambda x: x in id_prev, id_curr))
-
-            list_of_prev = []
+            prev_features = []
             for feature in prev_list:
-                if feature.landmark_id in ids:
-                    list_of_prev.append(feature.image_coords)
-            list_of_prev = np.array(list_of_prev)
+                prev_features.append(feature.image_coords)
+            prev_features = np.array(prev_features)
 
-            list_of_curr = []
+            current_features = []
             for feature in list_of_observations:
-                if feature.landmark_id in ids:
-                    list_of_curr.append(feature.image_coords)
-            list_of_curr = np.array(list_of_curr)
+                current_features.append(feature.image_coords)
+            new_features = np.array(current_features)
 
-            E, mask = cv2.findEssentialMat(
-                list_of_prev,
-                list_of_curr,
-                camera.get_camera_matrix(),
-                cv2.RANSAC,
-            )
-            print("\ncamera.get_camera_matrix():\n", camera.get_camera_matrix())
-            inliers1 = list_of_prev[mask]
-            inliers2 = list_of_curr[mask]
-
-            _, R, t, mask_pose = cv2.recoverPose(
-                E, inliers1, inliers2, camera.get_camera_matrix()
+            camera_pose = visual_odometry.run_visual_odometry(
+                timestamp=pose.timestamp,
+                prev_features=prev_features,
+                prev_features_ids=previous_ids,
+                new_features=new_features,
+                new_features_ids=current_ids,
+                camera_matrix=camera.get_camera_matrix(),
             )
 
-            t = t / np.linalg.norm(t)  # normalize translation
+            # Position check: We normalize truth delta position between frames as the visual odometry only provides delta position up to scale
+            pos_truth = pose.position - prev_pose.position
+            pos_truth = pos_truth / np.linalg.norm(pos_truth)
+            pos_truth = poses[0].rotation_matrix.transpose() @ pos_truth
+            current_pos_truth = current_pos_truth + pos_truth
+            current_rot_truth = pose.rotation_matrix.transpose() @ (
+                poses[0].rotation_matrix
+            )
 
-            # pos_CFp = -R.transpose() @ t
-            cur_R = R @ cur_R
-            cur_t = cur_t - (cur_R.transpose() @ t).reshape(3)
+            print("camera_pose position truth:\n", current_pos_truth)
+            print("camera_pose position:\n", camera_pose.position)
 
-            t_truth = pose.position - prev_pose.position
-            t_truth = t_truth / np.linalg.norm(t_truth)
-            t_truth = poses[0].rotation_matrix.transpose() @ t_truth
-            cur_t_truth = cur_t_truth + t_truth
-
-            print("cur_t:\n", cur_t)
-            print("cur_t_truth:\n", cur_t_truth)
-
-            cur_R_truth = pose.rotation_matrix.transpose() @ (poses[0].rotation_matrix)
+            # Orientaiton check:
             print(
-                "cur_R:\n",
-                GeometryUtils.euler_angles_from_rotation_matrix(cur_R),
+                "camera_pose orientation truth:\n",
+                GeometryUtils.euler_angles_from_rotation_matrix(current_rot_truth),
             )
+
             print(
-                "cur_R_truth:\n",
-                GeometryUtils.euler_angles_from_rotation_matrix(cur_R_truth),
+                "camera_pose orientation:\n",
+                GeometryUtils.euler_angles_from_rotation_matrix(
+                    camera_pose.rotation_matrix
+                ),
             )
 
         prev_list = list_of_observations
