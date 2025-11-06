@@ -84,12 +84,18 @@ class TestTriangulation:
         image_observations_0 = frame_observations[0]
         image_observations_1 = frame_observations[1]
 
-        feature_ids_0 = [
-            feature.landmark_id for feature in image_observations_0.feature_observations
-        ]
-        feature_ids_1 = [
-            feature.landmark_id for feature in image_observations_1.feature_observations
-        ]
+        feature_ids_0 = np.array(
+            [
+                feature.landmark_id
+                for feature in image_observations_0.feature_observations
+            ]
+        )
+        feature_ids_1 = np.array(
+            [
+                feature.landmark_id
+                for feature in image_observations_1.feature_observations
+            ]
+        )
 
         features_0 = []
         for feature in image_observations_0.feature_observations:
@@ -102,7 +108,7 @@ class TestTriangulation:
         features_1 = np.array(features_1)
 
         features_selected_0, features_selected_1, common_ids = (
-            VisualOdometry.get_common_features(
+            VisualOdometry.get_common_pts2d(
                 features_0, feature_ids_0, features_1, feature_ids_1
             )
         )

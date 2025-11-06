@@ -47,7 +47,7 @@ def main() -> None:
     #     ]
     # )
     landmarks = landmarks_3d.copy()
-    print("landmarks:\n", landmarks)
+    # print("landmarks:\n", landmarks)
 
     # This is so that the camera is looking at toward the X world axis
     quat_cam = GeometryUtils.quaternion_from_euler_angles(
@@ -192,6 +192,7 @@ def main() -> None:
     current_pos_truth = poses[0].position
     current_rot_truth = poses[0].rotation_matrix
 
+    scale = 1.0
     for frame_idx, pose in enumerate(poses):
         list_of_observations: List[FeatureObservation] = (
             image_renderer.project_landmarks_to_image(landmarks, pose)
@@ -220,19 +221,45 @@ def main() -> None:
                 current_features.append(feature.image_coords)
             new_features = np.array(current_features)
 
-            camera_pose = visual_odometry.run_visual_odometry(
-                timestamp=pose.timestamp,
-                prev_features=prev_features,
-                prev_features_ids=previous_ids,
-                new_features=new_features,
-                new_features_ids=current_ids,
-                camera_matrix=camera.get_camera_matrix(),
+            previous_ids = np.array(previous_ids)
+            current_ids = np.array(current_ids)
+
+            if not visual_odometry.is_initialized():
+                visual_odometry.init_visual_odometry(
+                    timestamp=pose.timestamp,
+                    prev_features=prev_features,
+                    prev_features_ids=previous_ids,
+                    new_features=new_features,
+                    new_features_ids=current_ids,
+                    camera_matrix=camera.get_camera_matrix(),
+                )
+                scale = np.linalg.norm(poses[1].position) / np.linalg.norm(
+                    visual_odometry.get_pose().position
+                )
+
+            else:
+                visual_odometry.update_visual_odometry(
+                    timestamp=pose.timestamp,
+                    prev_features=prev_features,
+                    prev_features_ids=previous_ids,
+                    new_features=new_features,
+                    new_features_ids=current_ids,
+                    camera_matrix=camera.get_camera_matrix(),
+                )
+
+            camera_pose = visual_odometry.get_pose()
+            camera_pose.position = camera_pose.position * scale
+            camera_pose_position_world = poses[0].rotation_matrix @ camera_pose.position
+            print(
+                "camera_pose_position_world camera_pose_position_world:\n",
+                camera_pose_position_world,
             )
 
             # Position check: We normalize truth delta position between frames as the visual odometry only provides delta position up to scale
             pos_truth = pose.position - prev_pose.position
-            pos_truth = pos_truth / np.linalg.norm(pos_truth)
-            pos_truth = poses[0].rotation_matrix.transpose() @ pos_truth
+            # pos_truth = pos_truth / np.linalg.norm(pos_truth)
+            # pos_truth = poses[0].rotation_matrix.transpose() @ pos_truth
+
             current_pos_truth = current_pos_truth + pos_truth
             current_rot_truth = pose.rotation_matrix.transpose() @ (
                 poses[0].rotation_matrix
@@ -250,7 +277,7 @@ def main() -> None:
             print(
                 "camera_pose orientation:\n",
                 GeometryUtils.euler_angles_from_rotation_matrix(
-                    camera_pose.rotation_matrix
+                    camera_pose.rotation_matrix.transpose()
                 ),
             )
 

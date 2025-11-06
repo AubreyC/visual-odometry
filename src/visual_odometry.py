@@ -1,67 +1,135 @@
 import warnings
-from typing import List, Tuple
+from typing import Tuple
 
 import cv2
 import numpy as np
 
+from .camera import PinHoleCamera
 from .camera_pose import CameraPose
-from .feature_tracker import FeatureTracker
 from .geometry import GeometryUtils
+from .validation_helper import ValidationHelper
 
 
 class VisualOdometry:
     def __init__(self, initial_pose: CameraPose) -> None:
-        self.initial_pose = initial_pose
         self.current_pose = initial_pose
+        self.points_3d = np.empty((0, 3))
+        self.points_3d_ids = np.empty((0,), dtype=int)
+        self.initialized: bool = False
 
     @classmethod
-    def get_common_features(
+    def get_common_pts2d(
         cls,
-        prev_features: np.ndarray,
-        prev_features_ids: List[int],
-        new_features: np.ndarray,
-        new_features_ids: List[int],
+        pts2d_1: np.ndarray,
+        pts2d_ids_1: np.ndarray,
+        pts2d_2: np.ndarray,
+        pts2d_ids_2: np.ndarray,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Get common features between two frames.
 
         Args:
-            prev_features (np.ndarray): _description_
-            prev_features_ids (List[int]): _description_
-            new_features (np.ndarray): _description_
-            new_features_ids (List[int]): _description_
+            pts2d_1 (np.ndarray): _description_
+            pts2d_ids_1 (np.ndarray): _description_
+            pts2d_2 (np.ndarray): _description_
+            pts2d_ids_2 (np.ndarray): _description_
 
         Returns:
-            Tuple[np.ndarray, List[int], List[int]]: _description_
+            Tuple[np.ndarray, np.ndarray, np.ndarray]:
+                Common 2D points, common 2D points ids, common ids
         """
 
         # Validate the inputs
-        FeatureTracker.validate_features_input(prev_features)
-        FeatureTracker.validate_features_input(new_features)
-        FeatureTracker.validate_features_ids(prev_features_ids)
-        FeatureTracker.validate_features_ids(new_features_ids)
+        ValidationHelper.validate_pts2d(pts2d_1)
+        ValidationHelper.validate_pts2d(pts2d_2)
+        ValidationHelper.validate_ids(pts2d_ids_1)
+        ValidationHelper.validate_ids(pts2d_ids_2)
 
         # Find common elements between prev_features and new_features
-        prev_features_ids = np.array(prev_features_ids)
-        new_features_ids = np.array(new_features_ids)
-
-        common_ids, common_indices_prev, common_indices_new = np.intersect1d(
-            prev_features_ids, new_features_ids, return_indices=True
+        common_ids, common_indices_1, common_indices_2 = np.intersect1d(
+            pts2d_ids_1, pts2d_ids_2, return_indices=True
         )
 
-        prev_features = prev_features[common_indices_prev]
-        new_features = new_features[common_indices_new]
+        pts2d_1_selected = pts2d_1[common_indices_1]
+        pts2d_2_selected = pts2d_2[common_indices_2]
 
-        return prev_features, new_features, common_ids
+        return pts2d_1_selected, pts2d_2_selected, common_ids
 
-    def run_visual_odometry(
+    def plot_opencv_image(
+        self, image: np.ndarray, points: np.ndarray, color: Tuple[int, int, int]
+    ) -> None:
+        """Plot a set of points on an image.
+
+        Args:
+            image (np.ndarray): Image
+            points (np.ndarray): Points
+            colors (np.ndarray): Colors
+        """
+        for point in points:
+            center = (int(round(point[0])), int(round(point[1])))
+            cv2.circle(image, center, 5, color, -1)
+        return None
+
+    @classmethod
+    def get_common_pts2d_pts3d(
+        cls,
+        pts2d: np.ndarray,
+        pts2d_ids: np.ndarray,
+        pts3d: np.ndarray,
+        pts3d_ids: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Get common 2D points and 3D points.
+
+        Args:
+            pts2d (np.ndarray): 2D points
+            pts2d_ids (np.ndarray): 2D points ids
+            pts3d (np.ndarray): 3D points
+            pts3d_ids (np.ndarray): 3D points ids
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray, np.ndarray]: Common 2D points, common 3D points, common ids
+        """
+
+        # Validate the inputs
+        ValidationHelper.validate_pts2d(pts2d)
+        ValidationHelper.validate_ids(pts2d_ids)
+        ValidationHelper.validate_pts3d(pts3d)
+        ValidationHelper.validate_ids(pts3d_ids)
+
+        # Find common elements between prev_features and new_features
+        common_ids, common_indices_2d, common_indices_3d = np.intersect1d(
+            pts2d_ids, pts3d_ids, return_indices=True
+        )
+
+        pts2d_selected = pts2d[common_indices_2d]
+        pts3d_selected = pts3d[common_indices_3d]
+
+        return pts2d_selected, pts3d_selected, common_ids
+
+    def is_initialized(self) -> bool:
+        """Check if the visual odometry is initialized.
+
+        Returns:
+            bool: True if the visual odometry is initialized, False otherwise
+        """
+        return self.initialized
+
+    def get_pose(self) -> CameraPose:
+        """Get the current pose of the camera.
+
+        Returns:
+            CameraPose: Current pose of the camera
+        """
+        return self.current_pose
+
+    def init_visual_odometry(
         self,
         timestamp: float,
         prev_features: np.ndarray,
-        prev_features_ids: List[int],
+        prev_features_ids: np.ndarray,
         new_features: np.ndarray,
-        new_features_ids: List[int],
+        new_features_ids: np.ndarray,
         camera_matrix: np.ndarray,
-    ) -> CameraPose:
+    ) -> bool:
         """Run visual odometry to estimate the current pose of the camera.
 
         Args:
@@ -74,58 +142,158 @@ class VisualOdometry:
             CameraPose: Estimated pose of the current camera
         """
 
+        if self.initialized:
+            warnings.warn(
+                "Visual odometry is already initialized", UserWarning, stacklevel=2
+            )
+            return False
+
         # Validate the inputs
-        FeatureTracker.validate_features_input(prev_features)
-        FeatureTracker.validate_features_input(new_features)
-        FeatureTracker.validate_features_ids(prev_features_ids)
-        FeatureTracker.validate_features_ids(new_features_ids)
+        ValidationHelper.validate_pts2d(prev_features)
+        ValidationHelper.validate_pts2d(new_features)
+        ValidationHelper.validate_ids(prev_features_ids)
+        ValidationHelper.validate_ids(new_features_ids)
 
         # Find common elements between prev_features and new_features
-        prev_features, new_features, _ = self.get_common_features(
+        prev_features_selected, new_features_selected, _ = self.get_common_pts2d(
             prev_features, prev_features_ids, new_features, new_features_ids
         )
 
-        if len(prev_features) < 10:
+        if len(prev_features_selected) < 5:
             warnings.warn(
                 "Not enough features to estimate pose", UserWarning, stacklevel=2
             )
-            return self.initial_pose
+            return self.initialized
 
         # Find essential matrix and recover pose
         E, mask = cv2.findEssentialMat(
-            prev_features, new_features, camera_matrix, cv2.RANSAC, 0.999, 1.0
+            prev_features_selected,
+            new_features_selected,
+            camera_matrix,
+            cv2.RANSAC,
+            0.999,
+            1.0,
         )
         # If no motion (essential matrix is singular) do not initialize the pose
         if np.linalg.norm(E) < 1e-6:
             warnings.warn("Essential matrix is singular", UserWarning, stacklevel=2)
-            return self.initial_pose
+            return self.initialized
 
         # Filter out the features that are not in the mask
-        prev_features = prev_features[mask.ravel() == 1]
-        new_features = new_features[mask.ravel() == 1]
+        prev_features_selected = prev_features_selected[mask.ravel() == 1]
+        new_features_selected = new_features_selected[mask.ravel() == 1]
 
         # Frame details: Previous frame is F1 and current frame is F2
         # - R: Frame rotation matrix from the F1 (previous frame) to the F2 (current frame)
-        # - t: Position of the center of the previous frame expressed in the current frame
+        # - t: Position of the origin of F1 expressed in the F2
         # We have following relation:
         # - X_F1 and X_F2 being the position of a point in the F1 and F2: X_F2 = R * X_F1 + t with .
         # - Center of current frame expressed in previous frame: C2_F1 = - R.transpose() @ t
         _, R, t, mask_pose = cv2.recoverPose(
-            E, prev_features, new_features, camera_matrix
+            E, prev_features_selected, new_features_selected, camera_matrix
         )
 
         t = t / np.linalg.norm(t)
-        R_total = R @ self.current_pose.rotation_matrix
+        R_total = R @ self.current_pose.rotation_matrix.transpose()
         t_total = self.current_pose.position - (R_total.transpose() @ t).reshape(3)
+
+        previous_pose = self.current_pose
 
         # Update the current pose
         self.current_pose = CameraPose(
             position=t_total,
-            orientation=GeometryUtils.quaternion_from_rotation_matrix(R_total),
+            orientation=GeometryUtils.quaternion_from_rotation_matrix(
+                R_total.transpose()
+            ),
             timestamp=timestamp,
         )
 
-        return self.current_pose
+        # Add initial 3D points to the map:
+        points_3d = VisualOdometry.triangulate_points(
+            previous_pose.rotation_matrix.transpose(),
+            previous_pose.position.reshape(3, 1),
+            self.current_pose.rotation_matrix.transpose(),
+            self.current_pose.position.reshape(3, 1),
+            camera_matrix,
+            prev_features_selected,
+            new_features_selected,
+        )
+
+        self.points_3d = np.concatenate((self.points_3d, points_3d))
+        self.points_3d_ids = np.concatenate(
+            (self.points_3d_ids, np.array(new_features_ids))
+        )
+
+        self.initialized = True
+        return self.initialized
+
+    def update_visual_odometry(
+        self,
+        timestamp: float,
+        prev_features: np.ndarray,
+        prev_features_ids: np.ndarray,
+        new_features: np.ndarray,
+        new_features_ids: np.ndarray,
+        camera_matrix: np.ndarray,
+    ) -> bool:
+        """Update the visual odometry.
+
+        Args:
+            timestamp (float): Timestamp of the new frame
+            prev_features (np.ndarray): Previous features
+            prev_features_ids (np.ndarray): Previous features ids
+            new_features (np.ndarray): New features
+            new_features_ids (np.ndarray): New features ids
+            camera_matrix (np.ndarray): Camera matrix
+        """
+
+        if not self.initialized:
+            warnings.warn(
+                "Visual odometry is not initialized", UserWarning, stacklevel=2
+            )
+            return False
+
+        # Validate the inputs
+        ValidationHelper.validate_pts2d(prev_features)
+        ValidationHelper.validate_pts2d(new_features)
+        ValidationHelper.validate_ids(prev_features_ids)
+        ValidationHelper.validate_ids(new_features_ids)
+
+        # Find common elements between new features and 3D points:
+        pts2d_selected, points_3d_selected, selected_ids = self.get_common_pts2d_pts3d(
+            new_features, new_features_ids, self.points_3d, self.points_3d_ids
+        )
+
+        if len(pts2d_selected) < 4:
+            warnings.warn(
+                "Not enough pts2d to estimate pose with SolvePnP",
+                UserWarning,
+                stacklevel=2,
+            )
+            return False
+
+        success, rvec, tvec, inliers = cv2.solvePnPRansac(
+            points_3d_selected, pts2d_selected, camera_matrix, None
+        )
+        if not success:
+            warnings.warn("Failed to solve PnP", UserWarning, stacklevel=2)
+            return False
+
+        # Get the rotation and translation from the rotation vector:
+        R, _ = cv2.Rodrigues(rvec)
+
+        posCF_F = -R.transpose() @ tvec
+        rot_CF_F = R
+
+        self.current_pose = CameraPose(
+            position=posCF_F.flatten(),
+            orientation=GeometryUtils.quaternion_from_rotation_matrix(
+                rot_CF_F.transpose()
+            ),
+            timestamp=timestamp,
+        )
+
+        return True
 
     @classmethod
     def triangulate_points(
@@ -156,11 +324,14 @@ class VisualOdometry:
         # Validate the inputs
         GeometryUtils.validate_rotation_matrix(rot_F1_F)
         GeometryUtils.validate_rotation_matrix(rot_F2_F)
-        GeometryUtils.validate_3d_point(originF1_F)
-        GeometryUtils.validate_3d_point(originF2_F)
 
-        FeatureTracker.validate_features_input(pts1)
-        FeatureTracker.validate_features_input(pts2)
+        ValidationHelper.validate_pt3d(originF1_F)
+        ValidationHelper.validate_pt3d(originF2_F)
+
+        ValidationHelper.validate_pts2d(pts1)
+        ValidationHelper.validate_pts2d(pts2)
+
+        PinHoleCamera.is_valid_camera_matrix(camera_matrix)
 
         # Need to convert position of the center of the frame to translation vector
         R1 = rot_F1_F
@@ -172,4 +343,5 @@ class VisualOdometry:
         P2 = camera_matrix @ np.hstack((R2, t2))
         pts4D = cv2.triangulatePoints(P1, P2, pts1.T, pts2.T)
         pts4D /= pts4D[3]  # convert from homogeneous to 3D
-        return pts4D[:3].T
+        result: np.ndarray = pts4D[:3].T
+        return result

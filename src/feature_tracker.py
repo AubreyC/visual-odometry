@@ -1,11 +1,12 @@
 """Feature detection and tracking algorithms for visual odometry."""
 
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
 
 from .validation_error import ProcessingError, ValidationError
+from .validation_helper import ValidationHelper
 
 MIN_FEATURES = 70  # minimum features before re-detection
 MAX_FEATURES = 150  # max ORB features per detection
@@ -34,7 +35,7 @@ class FeatureTracker:
     def run_tracking(
         self,
         current_image: np.ndarray,
-    ) -> Tuple[np.ndarray, List[int]]:
+    ) -> Tuple[np.ndarray, np.ndarray]:
         # Initialize the feature tracker
         if not self.initialized:
             self.current_features_pts, _, _ = self.detect_features(current_image)
@@ -102,42 +103,6 @@ class FeatureTracker:
             image.shape[0],
         )
         return optimal_keypoints, descriptors, selection_mask
-
-    @classmethod
-    def validate_features_input(cls, features: np.ndarray) -> None:
-        """Validate the features.
-
-        Args:
-            features: Nx2 array of feature coordinates.
-
-        Raises:
-            ValidationError: If inputs are invalid.
-        """
-        if (
-            not isinstance(features, np.ndarray)
-            or features.ndim != 2
-            or features.shape[1] != 2
-        ):
-            raise ValidationError(
-                f"features must be Nx2 array, got shape {features.shape}"
-            )
-
-    @classmethod
-    def validate_features_ids(cls, features_id: List[int]) -> None:
-        """_summary_
-
-        Args:
-            features_id (List[int]): _description_
-
-        Raises:
-            ValidationError: _description_
-        """
-        if not isinstance(features_id, list) or not all(
-            isinstance(id, int) for id in features_id
-        ):
-            raise ValidationError(
-                f"Features IDs must be a list of integers, got {features_id}"
-            )
 
     @classmethod
     def validate_image_input(cls, image: np.ndarray) -> None:
@@ -228,7 +193,7 @@ class FeatureTracker:
         self.validate_image_input(curr_image)
 
         # Validate the previous points
-        self.validate_features_input(prev_points)
+        ValidationHelper.validate_pts2d(prev_points)
 
         if len(prev_points) == 0:
             # No points to track
@@ -291,7 +256,7 @@ class FeatureTracker:
             ValidationError: If inputs are invalid.
         """
         # Validate the features
-        self.validate_features_input(features)
+        ValidationHelper.validate_pts2d(features)
 
         if len(features) == 0:
             return features, np.array([], dtype=bool)
@@ -325,7 +290,7 @@ class FeatureTracker:
         """
 
         # Validate the features
-        self.validate_features_input(features)
+        ValidationHelper.validate_pts2d(features)
 
         if len(features) == 0 or min_distance <= 0:
             return features, np.ones(len(features), dtype=bool)
@@ -367,8 +332,8 @@ class FeatureTracker:
         """
 
         # Validate the features
-        self.validate_features_input(new_features)
-        self.validate_features_input(existing_features)
+        ValidationHelper.validate_pts2d(new_features)
+        ValidationHelper.validate_pts2d(existing_features)
 
         if len(new_features) == 0 or min_distance <= 0:
             return new_features, np.ones(len(new_features), dtype=bool)
@@ -413,7 +378,7 @@ class FeatureTracker:
             ValidationError: If inputs are invalid.
         """
         # Validate features
-        self.validate_features_input(features)
+        ValidationHelper.validate_pts2d(features)
 
         if len(features) == 0 or min_distance <= 0:
             mask = np.ones(len(features), dtype=bool)
@@ -491,7 +456,7 @@ class FeatureTracker:
             ValidationError: If inputs are invalid.
         """
         # Validate features
-        self.validate_features_input(features)
+        ValidationHelper.validate_pts2d(features)
 
         if len(features) == 0:
             return features, np.array([], dtype=bool)
@@ -579,7 +544,7 @@ class FeatureTracker:
             ValidationError: If inputs are invalid.
         """
         # Validate features
-        self.validate_features_input(features)
+        ValidationHelper.validate_pts2d(features)
 
         if len(features) == 0:
             selection_mask = np.array([], dtype=bool)

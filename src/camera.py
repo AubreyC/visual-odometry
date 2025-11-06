@@ -289,3 +289,82 @@ class PinHoleCamera:
     def get_distortion_coefficients(self) -> np.ndarray:
         result = np.array([self.k1, self.k2, self.k3])
         return result
+
+    @classmethod
+    def from_camera_matrix(
+        cls,
+        camera_matrix: np.ndarray,
+        k1: float = 0.0,
+        k2: float = 0.0,
+        k3: float = 0.0,
+    ) -> "PinHoleCamera":
+        """Create a PinHoleCamera instance from a camera matrix.
+
+        Args:
+            camera_matrix (np.ndarray): A 3x3 camera intrinsic matrix in the format
+                [[fx, 0, cx], [0, fy, cy], [0, 0, 1]].
+            k1 (float): First radial distortion coefficient. Default is 0.0.
+            k2 (float): Second radial distortion coefficient. Default is 0.0.
+            k3 (float): Third radial distortion coefficient. Default is 0.0.
+
+        Returns:
+            PinHoleCamera: A new PinHoleCamera instance.
+
+        Raises:
+            ValidationError: If the camera matrix is invalid.
+        """
+        if not cls.is_valid_camera_matrix(camera_matrix):
+            raise ValidationError(f"Invalid camera matrix provided: {camera_matrix}")
+
+        fx = float(camera_matrix[0, 0])
+        fy = float(camera_matrix[1, 1])
+        cx = float(camera_matrix[0, 2])
+        cy = float(camera_matrix[1, 2])
+
+        return cls(fx=fx, fy=fy, cx=cx, cy=cy, k1=k1, k2=k2, k3=k3)
+
+    @staticmethod
+    def is_valid_camera_matrix(camera_matrix: np.ndarray) -> bool:
+        """Check if a camera matrix is valid.
+
+        A valid camera matrix should be a 3x3 matrix with the form:
+        [[fx, 0, cx],
+         [0, fy, cy],
+         [0, 0, 1]]
+
+        Args:
+            camera_matrix (np.ndarray): The camera matrix to validate.
+
+        Returns:
+            bool: True if the camera matrix is valid, False otherwise.
+        """
+        # Check if it's a numpy array
+        if not isinstance(camera_matrix, np.ndarray):
+            return False
+
+        # Check shape
+        if camera_matrix.shape != (3, 3):
+            return False
+
+        # Check if all elements are finite
+        if not np.all(np.isfinite(camera_matrix)):
+            return False
+
+        # Check the structure: off-diagonal elements in first two rows should be 0
+        if camera_matrix[0, 1] != 0.0 or camera_matrix[1, 0] != 0.0:
+            return False
+
+        # Check bottom row is [0, 0, 1]
+        if not np.allclose(camera_matrix[2, :], [0.0, 0.0, 1.0]):
+            return False
+
+        # Check focal lengths are positive
+        fx = camera_matrix[0, 0]
+        fy = camera_matrix[1, 1]
+        if fx <= 0 or fy <= 0:
+            return False
+
+        # Check principal points are finite (already checked above, but being explicit)
+        cx = camera_matrix[0, 2]
+        cy = camera_matrix[1, 2]
+        return bool(np.isfinite(cx) and np.isfinite(cy))

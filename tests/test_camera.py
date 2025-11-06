@@ -521,3 +521,42 @@ class TestPinHoleCamera:
             rtol=1e-10,
             err_msg="Optical center should not be affected by radial distortion",
         )
+
+    def test_camera_matrix_validation(self) -> None:
+        """Test the is_valid_camera_matrix method."""
+        print("Testing camera matrix validation...")
+
+        # Valid camera matrix
+        K_valid = np.array([[800, 0, 320], [0, 800, 240], [0, 0, 1]])
+        assert PinHoleCamera.is_valid_camera_matrix(K_valid), (
+            "Valid matrix should be accepted"
+        )
+
+        # Invalid: wrong shape
+        K_wrong_shape = np.array([[800, 0, 320], [0, 800, 240]])
+        assert not PinHoleCamera.is_valid_camera_matrix(K_wrong_shape), (
+            "Wrong shape should be rejected"
+        )
+
+        # Invalid: non-zero off-diagonal
+        K_non_zero_off_diag = np.array([[800, 1, 320], [0, 800, 240], [0, 0, 1]])
+        assert not PinHoleCamera.is_valid_camera_matrix(K_non_zero_off_diag), (
+            "Non-zero off-diagonal should be rejected"
+        )
+
+        # Invalid: wrong bottom row
+        K_wrong_bottom = np.array([[800, 0, 320], [0, 800, 240], [0, 0, 2]])
+        assert not PinHoleCamera.is_valid_camera_matrix(K_wrong_bottom), (
+            "Wrong bottom row should be rejected"
+        )
+
+        # Invalid: negative focal length
+        K_neg_focal = np.array([[-800, 0, 320], [0, 800, 240], [0, 0, 1]])
+        assert not PinHoleCamera.is_valid_camera_matrix(K_neg_focal), (
+            "Negative focal length should be rejected"
+        )
+
+        # Invalid: not numpy array
+        assert not PinHoleCamera.is_valid_camera_matrix(
+            [[800, 0, 320], [0, 800, 240], [0, 0, 1]]
+        ), "List should be rejected"
