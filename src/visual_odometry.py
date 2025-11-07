@@ -1,5 +1,5 @@
 import warnings
-from typing import Tuple
+from typing import List, Tuple
 
 import cv2
 import numpy as np
@@ -10,12 +10,29 @@ from .geometry import GeometryUtils
 from .validation_helper import ValidationHelper
 
 
+class Keyframe:
+    def __init__(
+        self,
+        timestamp: float,
+        pose: CameraPose,
+        camera_matrix: np.ndarray,
+        points_2d: np.ndarray,
+        points_2d_ids: np.ndarray,
+    ) -> None:
+        self.timestamp = timestamp
+        self.pose = pose
+        self.points_2d = points_2d
+        self.points_2d_ids = points_2d_ids
+
+
 class VisualOdometry:
     def __init__(self, initial_pose: CameraPose) -> None:
         self.current_pose = initial_pose
         self.points_3d = np.empty((0, 3))
         self.points_3d_ids = np.empty((0,), dtype=int)
         self.initialized: bool = False
+
+        self.keyframes: List[Keyframe] = []
 
     @classmethod
     def get_common_pts2d(
@@ -129,6 +146,7 @@ class VisualOdometry:
         new_features: np.ndarray,
         new_features_ids: np.ndarray,
         camera_matrix: np.ndarray,
+        reprojection_error_threshold: float = 1.0,
     ) -> bool:
         """Run visual odometry to estimate the current pose of the camera.
 
@@ -155,8 +173,10 @@ class VisualOdometry:
         ValidationHelper.validate_ids(new_features_ids)
 
         # Find common elements between prev_features and new_features
-        prev_features_selected, new_features_selected, _ = self.get_common_pts2d(
-            prev_features, prev_features_ids, new_features, new_features_ids
+        prev_features_selected, new_features_selected, features_ids_selected = (
+            self.get_common_pts2d(
+                prev_features, prev_features_ids, new_features, new_features_ids
+            )
         )
 
         if len(prev_features_selected) < 5:
@@ -182,6 +202,7 @@ class VisualOdometry:
         # Filter out the features that are not in the mask
         prev_features_selected = prev_features_selected[mask.ravel() == 1]
         new_features_selected = new_features_selected[mask.ravel() == 1]
+        features_ids_selected = features_ids_selected[mask.ravel() == 1]
 
         # Frame details: Previous frame is F1 and current frame is F2
         # - R: Frame rotation matrix from the F1 (previous frame) to the F2 (current frame)
@@ -209,7 +230,7 @@ class VisualOdometry:
         )
 
         # Add initial 3D points to the map:
-        points_3d = VisualOdometry.triangulate_points(
+        points_3d, reprojection_error = VisualOdometry.triangulate_points(
             previous_pose.rotation_matrix.transpose(),
             previous_pose.position.reshape(3, 1),
             self.current_pose.rotation_matrix.transpose(),
@@ -219,9 +240,29 @@ class VisualOdometry:
             new_features_selected,
         )
 
-        self.points_3d = np.concatenate((self.points_3d, points_3d))
+        # Filter out the points with high reprojection error
+        points_3d_selected = points_3d[
+            reprojection_error < reprojection_error_threshold
+        ]
+        points_3d_ids_selected = features_ids_selected[
+            reprojection_error < reprojection_error_threshold
+        ]
+
+        self.points_3d = np.concatenate((self.points_3d, points_3d_selected))
         self.points_3d_ids = np.concatenate(
-            (self.points_3d_ids, np.array(new_features_ids))
+            (self.points_3d_ids, np.array(points_3d_ids_selected))
+        )
+
+        # Add keyframe to the list of keyframes
+        print("new_features_ids:\n", new_features_ids)
+        self.keyframes.append(
+            Keyframe(
+                timestamp,
+                self.current_pose,
+                camera_matrix,
+                new_features,
+                new_features_ids,
+            )
         )
 
         self.initialized = True
@@ -246,6 +287,7 @@ class VisualOdometry:
             new_features_ids (np.ndarray): New features ids
             camera_matrix (np.ndarray): Camera matrix
         """
+        print("1")
 
         if not self.initialized:
             warnings.warn(
@@ -259,10 +301,16 @@ class VisualOdometry:
         ValidationHelper.validate_ids(prev_features_ids)
         ValidationHelper.validate_ids(new_features_ids)
 
+        print("2")
+
         # Find common elements between new features and 3D points:
         pts2d_selected, points_3d_selected, selected_ids = self.get_common_pts2d_pts3d(
             new_features, new_features_ids, self.points_3d, self.points_3d_ids
         )
+
+        print("new_features_ids:\n", new_features_ids)
+        print("self.points_3d_ids:\n", self.points_3d_ids)
+        print("selected_ids:\n", selected_ids)
 
         if len(pts2d_selected) < 4:
             warnings.warn(
@@ -270,8 +318,10 @@ class VisualOdometry:
                 UserWarning,
                 stacklevel=2,
             )
+            print("Not enough pts2d to estimate pose with SolvePnP")
             return False
 
+        print("3")
         success, rvec, tvec, inliers = cv2.solvePnPRansac(
             points_3d_selected, pts2d_selected, camera_matrix, None
         )
@@ -293,7 +343,122 @@ class VisualOdometry:
             timestamp=timestamp,
         )
 
+        print("4")
+        # Check condition to add new keyframe:
+        keyframe_last = self.keyframes[-1]
+        quat_delta = GeometryUtils.quaternion_multiply(
+            keyframe_last.pose.quaternion,
+            GeometryUtils.quaternion_inverse(self.current_pose.quaternion),
+        )
+        _, angle = GeometryUtils.axis_angle_from_quaternion(quat_delta)
+
+        if np.linalg.norm(
+            keyframe_last.pose.position - self.current_pose.position
+        ) > 0.1 and angle > np.deg2rad(2):
+            print("Adding new keyframe")
+            print("keyframe_last.points_2d_ids:\n", keyframe_last.points_2d_ids)
+
+            self.add_pts3d_to_map(
+                keyframe_last.points_2d,
+                keyframe_last.points_2d_ids,
+                keyframe_last.pose,
+                new_features,
+                new_features_ids,
+                self.current_pose,
+                camera_matrix,
+            )
+
+            self.keyframes.append(
+                Keyframe(
+                    timestamp,
+                    self.current_pose,
+                    camera_matrix,
+                    new_features,
+                    new_features_ids,
+                )
+            )
+        else:
+            print("Not adding new keyframe")
+
         return True
+
+    def add_pts3d_to_map(
+        self,
+        pts2d_1: np.ndarray,
+        pts2d_ids_1: np.ndarray,
+        pose_1: CameraPose,
+        pts2d_2: np.ndarray,
+        pts2d_ids_2: np.ndarray,
+        pose_2: CameraPose,
+        camera_matrix: np.ndarray,
+        reprojection_error_threshold: float = 1.0,
+    ) -> None:
+        """Add 3D points to the map.
+
+        Args:
+            pts2d_1 (np.ndarray): 2D points in frame 1
+            pts2d_ids_1 (np.ndarray): 2D points ids in frame 1
+            pose_1 (CameraPose): Pose of frame 1
+            pts2d_2 (np.ndarray): 2D points in frame 2
+            pts2d_ids_2 (np.ndarray): 2D points ids in frame 2
+            pose_2 (CameraPose): Pose of frame 2
+            camera_matrix (np.ndarray): Camera matrix
+            reprojection_error_threshold (float): Reprojection error threshold
+        """
+
+        # Validate the inputs
+        ValidationHelper.validate_pts2d(pts2d_1)
+        ValidationHelper.validate_pts2d(pts2d_2)
+        ValidationHelper.validate_ids(pts2d_ids_1)
+        ValidationHelper.validate_ids(pts2d_ids_2)
+
+        # Find common elements between new features points:
+        pts2d_1_selected, pts2d_2_selected, selected_ids = self.get_common_pts2d(
+            pts2d_1, pts2d_ids_1, pts2d_2, pts2d_ids_2
+        )
+        print("pts2d_ids_1:\n", pts2d_ids_1)
+        print("pts2d_ids_2:\n", pts2d_ids_2)
+
+        # Find ids that are not in the 3D points map:
+        new_ids = np.setdiff1d(selected_ids, self.points_3d_ids)
+        print("selected_ids:\n", selected_ids)
+        print("New ids:\n", new_ids)
+
+        if len(new_ids) > 0:
+            # Add initial 3D points to the map:
+
+            mask_pts2d_1 = np.isin(pts2d_ids_1, new_ids)
+            mask_pts2d_2 = np.isin(pts2d_ids_2, new_ids)
+
+            pts2d_1_selected = pts2d_1[mask_pts2d_1]
+            pts2d_2_selected = pts2d_2[mask_pts2d_2]
+
+            points_3d, reprojection_error = VisualOdometry.triangulate_points(
+                pose_1.rotation_matrix.transpose(),
+                pose_1.position.reshape(3, 1),
+                pose_2.rotation_matrix.transpose(),
+                pose_2.position.reshape(3, 1),
+                camera_matrix,
+                pts2d_1_selected,
+                pts2d_2_selected,
+            )
+
+            # Filter out the points with high reprojection error
+            points_3d_selected = points_3d[
+                reprojection_error < reprojection_error_threshold
+            ]
+            points_3d_ids_selected = new_ids[
+                reprojection_error < reprojection_error_threshold
+            ]
+
+            if len(points_3d_selected) > 0:
+                print("Adding points to the map:\n", points_3d_ids_selected)
+                self.points_3d = np.concatenate((self.points_3d, points_3d_selected))
+                self.points_3d_ids = np.concatenate(
+                    (self.points_3d_ids, np.array(points_3d_ids_selected))
+                )
+
+        return
 
     @classmethod
     def triangulate_points(
@@ -305,7 +470,7 @@ class VisualOdometry:
         camera_matrix: np.ndarray,
         pts1: np.ndarray,
         pts2: np.ndarray,
-    ) -> np.ndarray:
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """Triangulate 2D image coordinates of points between two frames.
 
         Args:
@@ -318,7 +483,7 @@ class VisualOdometry:
             pts2 (np.ndarray): 2D image coordinates of points in on camera 2 (attached to frame F2)
 
         Returns:
-            np.ndarray: 3D points expressed in frame F
+            Tuple[np.ndarray, np.ndarray]: 3D points expressed in frame F, Reprojection error
         """
 
         # Validate the inputs
@@ -344,4 +509,18 @@ class VisualOdometry:
         pts4D = cv2.triangulatePoints(P1, P2, pts1.T, pts2.T)
         pts4D /= pts4D[3]  # convert from homogeneous to 3D
         result: np.ndarray = pts4D[:3].T
-        return result
+
+        # Add reprojection error to the points:
+        print("result:\n", result.shape)
+        pts1_reprojected, _ = cv2.projectPoints(result, R1, t1, camera_matrix, None)
+        pts2_reprojected, _ = cv2.projectPoints(result, R2, t2, camera_matrix, None)
+
+        pts1_reprojected = np.squeeze(pts1_reprojected, axis=1)
+        pts2_reprojected = np.squeeze(pts2_reprojected, axis=1)
+
+        reprojection_error = (
+            np.linalg.norm(pts1_reprojected - pts1, axis=1)
+            + np.linalg.norm(pts2_reprojected - pts2, axis=1)
+        ) / 2
+
+        return result, reprojection_error
