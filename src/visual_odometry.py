@@ -65,7 +65,7 @@ class VisualOdometry:
         ValidationHelper.validate_ids(pts2d_ids_1)
         ValidationHelper.validate_ids(pts2d_ids_2)
 
-        # Find common elements between prev_features and new_features
+        # Find common elements between previous and new_features
         common_ids, common_indices_1, common_indices_2 = np.intersect1d(
             pts2d_ids_1, pts2d_ids_2, return_indices=True
         )
@@ -166,23 +166,25 @@ class VisualOdometry:
     def init_visual_odometry(
         self,
         timestamp: float,
-        prev_features: np.ndarray,
-        prev_features_ids: np.ndarray,
-        new_features: np.ndarray,
-        new_features_ids: np.ndarray,
+        pts2d_prev: np.ndarray,
+        pts2d_ids_prev: np.ndarray,
+        pts2d_new: np.ndarray,
+        pts2d_ids_new: np.ndarray,
         camera_matrix: np.ndarray,
         reprojection_error_threshold: float = 1.0,
     ) -> bool:
         """Run visual odometry to estimate the current pose of the camera.
 
         Args:
-            prev_features (np.ndarray): _description_
-            prev_features_ids (np.ndarray): _description_
-            new_features (np.ndarray): _description_
-            new_features_ids (np.ndarray): _description_
+            pts2d_prev (np.ndarray): Previous 2D features
+            pts2d_ids_prev (np.ndarray): Previous 2D features ids
+            pts2d_new (np.ndarray): New 2D features
+            pts2d_ids_new (np.ndarray): New 2D features ids
+            camera_matrix (np.ndarray): Camera matrix
+            reprojection_error_threshold (float): Reprojection error threshold to filter out the points with high reprojection error
 
         Returns:
-            CameraPose: Estimated pose of the current camera
+            bool: True if the visual odometry is initialized, False otherwise
         """
 
         if self.initialized:
@@ -192,19 +194,17 @@ class VisualOdometry:
             return False
 
         # Validate the inputs
-        ValidationHelper.validate_pts2d(prev_features)
-        ValidationHelper.validate_pts2d(new_features)
-        ValidationHelper.validate_ids(prev_features_ids)
-        ValidationHelper.validate_ids(new_features_ids)
+        ValidationHelper.validate_pts2d(pts2d_prev)
+        ValidationHelper.validate_pts2d(pts2d_new)
+        ValidationHelper.validate_ids(pts2d_ids_prev)
+        ValidationHelper.validate_ids(pts2d_ids_new)
 
         # Find common elements between prev_features and new_features
-        prev_features_selected, new_features_selected, features_ids_selected = (
-            self.get_common_pts2d(
-                prev_features, prev_features_ids, new_features, new_features_ids
-            )
+        pts2d_prev_selected, pts2d_new_selected, ids_selected = self.get_common_pts2d(
+            pts2d_prev, pts2d_ids_prev, pts2d_new, pts2d_ids_new
         )
 
-        if len(prev_features_selected) < 5:
+        if len(pts2d_prev_selected) < 5:
             warnings.warn(
                 "Not enough features to estimate pose", UserWarning, stacklevel=2
             )
@@ -212,8 +212,8 @@ class VisualOdometry:
 
         # Find essential matrix and recover pose
         E, mask = cv2.findEssentialMat(
-            prev_features_selected,
-            new_features_selected,
+            pts2d_prev_selected,
+            pts2d_new_selected,
             camera_matrix,
             cv2.RANSAC,
             0.999,
@@ -225,9 +225,9 @@ class VisualOdometry:
             return self.initialized
 
         # Filter out the features that are not in the mask
-        prev_features_selected = prev_features_selected[mask.ravel() == 1]
-        new_features_selected = new_features_selected[mask.ravel() == 1]
-        features_ids_selected = features_ids_selected[mask.ravel() == 1]
+        pts2d_prev_selected = pts2d_prev_selected[mask.ravel() == 1]
+        pts2d_new_selected = pts2d_new_selected[mask.ravel() == 1]
+        ids_selected = ids_selected[mask.ravel() == 1]
 
         # Frame details: Previous frame is F1 and current frame is F2
         # - R: Frame rotation matrix from the F1 (previous frame) to the F2 (current frame)
@@ -236,7 +236,7 @@ class VisualOdometry:
         # - X_F1 and X_F2 being the position of a point in the F1 and F2: X_F2 = R * X_F1 + t with .
         # - Center of current frame expressed in previous frame: C2_F1 = - R.transpose() @ t
         _, R, t, mask_pose = cv2.recoverPose(
-            E, prev_features_selected, new_features_selected, camera_matrix
+            E, pts2d_prev_selected, pts2d_new_selected, camera_matrix
         )
 
         t = t / np.linalg.norm(t)
@@ -256,11 +256,11 @@ class VisualOdometry:
 
         # Add 3D points to the map at initialization
         self.add_pts3d_to_map(
-            prev_features_selected,
-            features_ids_selected,
+            pts2d_prev_selected,
+            ids_selected,
             previous_pose,
-            new_features_selected,
-            features_ids_selected,
+            pts2d_new_selected,
+            ids_selected,
             self.current_pose,
             camera_matrix,
         )
@@ -271,8 +271,8 @@ class VisualOdometry:
                 timestamp,
                 self.current_pose,
                 camera_matrix,
-                new_features,
-                new_features_ids,
+                pts2d_new,
+                pts2d_ids_new,
             )
         )
 
@@ -282,10 +282,10 @@ class VisualOdometry:
     def update_visual_odometry(
         self,
         timestamp: float,
-        prev_features: np.ndarray,
-        prev_features_ids: np.ndarray,
-        new_features: np.ndarray,
-        new_features_ids: np.ndarray,
+        pts2d_prev: np.ndarray,
+        pts2d_ids_prev: np.ndarray,
+        pts2d_new: np.ndarray,
+        pts2d_ids_new: np.ndarray,
         camera_matrix: np.ndarray,
         keyframe_angle_threshold: float = np.deg2rad(20),
         keyframe_position_threshold: float = 5.0,
@@ -294,10 +294,10 @@ class VisualOdometry:
 
         Args:
             timestamp (float): Timestamp of the new frame
-            prev_features (np.ndarray): Previous features
-            prev_features_ids (np.ndarray): Previous features ids
-            new_features (np.ndarray): New features
-            new_features_ids (np.ndarray): New features ids
+            pts2d_prev (np.ndarray): Previous features
+            pts2d_ids_prev (np.ndarray): Previous features ids
+            pts2d_new (np.ndarray): New features
+            pts2d_ids_new (np.ndarray): New features ids
             camera_matrix (np.ndarray): Camera matrix
             keyframe_angle_threshold (float): Keyframe angle threshold
             keyframe_position_threshold (float): Keyframe position threshold
@@ -310,14 +310,14 @@ class VisualOdometry:
             return False
 
         # Validate the inputs
-        ValidationHelper.validate_pts2d(prev_features)
-        ValidationHelper.validate_pts2d(new_features)
-        ValidationHelper.validate_ids(prev_features_ids)
-        ValidationHelper.validate_ids(new_features_ids)
+        ValidationHelper.validate_pts2d(pts2d_prev)
+        ValidationHelper.validate_pts2d(pts2d_new)
+        ValidationHelper.validate_ids(pts2d_ids_prev)
+        ValidationHelper.validate_ids(pts2d_ids_new)
 
         # Find common elements between new features and 3D points:
         pts2d_selected, points_3d_selected, selected_ids = self.get_common_pts2d_pts3d(
-            new_features, new_features_ids, self.points_3d, self.points_3d_ids
+            pts2d_new, pts2d_ids_new, self.points_3d, self.points_3d_ids
         )
 
         # Remove the ones in ignores
@@ -348,7 +348,7 @@ class VisualOdometry:
         # Last used Ids:
         inliers_ids = selected_ids[inliers.squeeze()]
         self.points_3d_used_ids = inliers_ids
-        self.points_3d_detected_ids = new_features_ids
+        self.points_3d_detected_ids = pts2d_ids_new
 
         if not success:
             warnings.warn("Failed to solve PnP", UserWarning, stacklevel=2)
@@ -386,8 +386,8 @@ class VisualOdometry:
                 keyframe_last.points_2d,
                 keyframe_last.points_2d_ids,
                 keyframe_last.pose,
-                new_features,
-                new_features_ids,
+                pts2d_new,
+                pts2d_ids_new,
                 self.current_pose,
                 camera_matrix,
             )
@@ -397,8 +397,8 @@ class VisualOdometry:
                     timestamp,
                     self.current_pose,
                     camera_matrix,
-                    new_features,
-                    new_features_ids,
+                    pts2d_new,
+                    pts2d_ids_new,
                 )
             )
         else:

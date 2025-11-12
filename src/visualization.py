@@ -311,22 +311,35 @@ class Visualizer:
         self,
         landmarks: np.ndarray,
         poses: List[CameraPose],
+        poses_second: Optional[List[CameraPose]] = None,
         show_orientation: bool = True,
         orientation_scale: float = 0.1,
         title: str = "Scene Overview",
+        fig: Optional[plt.Figure] = None,
+        ax: Optional[Any] = None,
     ) -> plt.Figure:
         """Plot complete scene with landmarks and camera trajectory.
 
         Args:
             landmarks (np.ndarray): Landmark positions.
             poses (List[CameraPose]): Camera poses.
+            poses_second (Optional[List[CameraPose]]): Optional second set of camera poses.
+            show_orientation (bool): Whether to show camera orientation arrows.
+            orientation_scale (float): Scale factor for orientation arrows.
             title (str): Plot title.
+            fig (Optional[plt.Figure]): Existing matplotlib figure to update. If None, creates new figure.
+            ax (Optional[Any]): Existing matplotlib axes to update. If None, creates new axes.
 
         Returns:
             plt.Figure: The matplotlib figure.
         """
-        fig = plt.figure(figsize=self.figsize)
-        ax = fig.add_subplot(111, projection="3d")
+        # Create new figure/axes if not provided, otherwise reuse existing ones
+        if fig is None or ax is None:
+            fig = plt.figure(figsize=self.figsize)
+            ax = fig.add_subplot(111, projection="3d")
+        else:
+            # Clear existing axes content
+            ax.clear()
 
         # Plot landmarks
         ax.scatter(
@@ -424,6 +437,92 @@ class Visualizer:
                 label="End",
             )
 
+        # Show orientation arrows at regular intervals
+        if poses_second is not None:
+            if show_orientation and len(poses_second) > 0:
+                step = max(1, len(poses_second) // 10)  # Show orientation for ~10 poses
+                for i in range(0, len(poses_second), step):
+                    pose = poses_second[i]
+                    pos = pose.position
+
+                    # Camera forward direction (X-axis in camera frame)
+                    x_dir = pose.rotation_matrix @ np.array([1, 0, 0])
+
+                    # Plot forward arrow
+                    ax.quiver(
+                        pos[0],
+                        pos[1],
+                        pos[2],
+                        x_dir[0],
+                        x_dir[1],
+                        x_dir[2],
+                        color="red",
+                        length=orientation_scale,
+                        normalize=True,
+                    )
+
+                    # Camera forward direction (X-axis in camera frame)
+                    y_dir = pose.rotation_matrix @ np.array([0, 1, 0])
+
+                    # Plot forward arrow
+                    ax.quiver(
+                        pos[0],
+                        pos[1],
+                        pos[2],
+                        y_dir[0],
+                        y_dir[1],
+                        y_dir[2],
+                        color="green",
+                        length=orientation_scale,
+                        normalize=True,
+                    )
+
+                    # Camera forward direction (Z-axis in camera frame)
+                    z_dir = pose.rotation_matrix @ np.array([0, 0, 1])
+
+                    # Plot forward arrow
+                    ax.quiver(
+                        pos[0],
+                        pos[1],
+                        pos[2],
+                        z_dir[0],
+                        z_dir[1],
+                        z_dir[2],
+                        color="blue",
+                        length=orientation_scale,
+                        normalize=True,
+                    )
+
+            # Plot trajectory
+            if len(poses_second) > 0:
+                positions = np.array([pose.position for pose in poses_second])
+                ax.plot(
+                    positions[:, 0],
+                    positions[:, 1],
+                    positions[:, 2],
+                    color="purple",
+                    linewidth=3,
+                    label="Camera Trajectory Second",
+                )
+
+                # Mark start and end
+                ax.scatter(
+                    positions[0, 0],
+                    positions[0, 1],
+                    positions[0, 2],
+                    color="green",
+                    s=100,
+                    label="Start",
+                )
+                ax.scatter(
+                    positions[-1, 0],
+                    positions[-1, 1],
+                    positions[-1, 2],
+                    color="red",
+                    s=100,
+                    label="End",
+                )
+
         # Set labels and title
         ax.set_xlabel("X (m)")
         ax.set_ylabel("Y (m)")
@@ -432,9 +531,9 @@ class Visualizer:
         ax.legend()
         ax.grid(True)
 
-        ax.set_xlim(-50, 50)  # Set x-axis
-        ax.set_ylim(-50, 50)  # Set y-axis
-        ax.set_zlim(-50, 50)  # Set z-axis
+        ax.set_xlim(-10, 10)  # Set x-axis
+        ax.set_ylim(-10, 10)  # Set y-axis
+        ax.set_zlim(-10, 10)  # Set z-axis
 
         return fig
 
@@ -567,7 +666,8 @@ class Visualizer:
 
     def show(self) -> None:
         """Show all plots."""
-        plt.show()
+        plt.show(block=True)
+        plt.pause(0.1)
 
 
 class OpenCVSceneVisualizer:
@@ -577,6 +677,8 @@ class OpenCVSceneVisualizer:
         self,
         image_width: int = 1280,
         image_height: int = 720,
+        fx: float = 800.0,
+        fy: float = 800.0,
         background_color: Tuple[int, int, int] = (255, 255, 255),
         interactive: bool = False,
     ):
@@ -596,8 +698,8 @@ class OpenCVSceneVisualizer:
 
         # Camera intrinsic parameters for scene visualization
         self.scene_camera = PinHoleCamera(
-            fx=800.0,
-            fy=800.0,
+            fx=fx,
+            fy=fy,
             cx=image_width / 2,
             cy=image_height / 2,
         )
@@ -779,7 +881,7 @@ class OpenCVSceneVisualizer:
         self,
         image: np.ndarray,
         camera_pose: CameraPose,
-        axis_length: float = 1.0,
+        axis_length: float = 10.0,
         thickness: int = 2,
     ) -> np.ndarray:
         """Draw coordinate axes (X=red, Y=green, Z=blue) in the scene.
@@ -834,7 +936,7 @@ class OpenCVSceneVisualizer:
         camera_pose: CameraPose,
         cross_size: int = 10,
         color: Tuple[int, int, int] = (0, 0, 255),
-        thickness: int = 2,
+        thickness: int = 1,
         landmark_ids: Optional[List[int]] = None,
     ) -> np.ndarray:
         """Draw landmarks as crosses in the scene.
@@ -880,9 +982,9 @@ class OpenCVSceneVisualizer:
         image: np.ndarray,
         scene_camera_pose: CameraPose,
         camera_pose: CameraPose,
-        pyramid_length: float = 1.0,
+        pyramid_length: float = 0.5,
         color: Tuple[int, int, int] = (255, 0, 0),
-        thickness: int = 2,
+        thickness: int = 1,
     ) -> np.ndarray:
         """Draw camera pyramid with apex at camera location and base along Z axis.
 
@@ -1079,6 +1181,25 @@ class OpenCVSceneVisualizer:
             0.7,
             (255, 255, 255),
             2,
+        )
+
+        return image
+
+    def show_scene_static(
+        self,
+        scene_camera_pose: CameraPose,
+        camera_pose: CameraPose,
+        landmarks: np.ndarray,
+        landmark_ids: Optional[List[int]] = None,
+        show_axes: bool = True,
+    ) -> np.ndarray:
+        # Static mode: show single image
+        image = self.render_scene(
+            scene_camera_pose,
+            camera_pose,
+            landmarks,
+            landmark_ids,
+            show_axes,
         )
 
         return image
