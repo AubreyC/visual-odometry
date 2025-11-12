@@ -198,6 +198,32 @@ class CameraPose:
 
         return CameraPose(camera_position, quaternion, timestamp)
 
+    @staticmethod
+    def create_look_straight_pose(
+        initial_position: Optional[np.ndarray] = None, timestamp: float = 0.0
+    ) -> "CameraPose":
+        """Create a camera pose that looks straight ahead.
+        Args:
+            initial_position (np.ndarray): Initial position of the camera (x, y, z).
+            timestamp (float): Timestamp for this pose. Defaults to 0.0.
+
+        The camera's Z-axis will be parallel to the world frame's X-axis.
+        """
+
+        initial_position = (
+            initial_position
+            if initial_position is not None
+            else np.array([0.0, 0.0, 0.0])
+        )
+
+        return CameraPose(
+            position=initial_position,
+            orientation=GeometryUtils.quaternion_from_euler_angles(
+                np.array([-np.pi / 2, 0.0, -np.pi / 2])
+            ),
+            timestamp=0.0,
+        )
+
     def copy(self) -> "CameraPose":
         """Create a copy of the camera pose."""
         return CameraPose(

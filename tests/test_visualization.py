@@ -1,22 +1,23 @@
 import os
 import tempfile
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
 from src.camera_pose import CameraPose, TrajectoryGenerator
 from src.feature_observation import FeatureObservation, ImageObservations
 from src.landmarks import LandmarkGenerator
-from src.visualization import Visualizer
+from src.matplotlib_visualizer import MatplotVisualizer
 
 
-class TestVisualOdometryVisualizer:
-    """Test suite for VisualOdometryVisualizer class."""
+class TestMatplotVisualizer:
+    """Test suite for MatplotVisualizer class."""
 
     @pytest.fixture
-    def visualizer(self) -> Visualizer:
+    def visualizer(self) -> MatplotVisualizer:
         """Create a test visualizer."""
-        return Visualizer(figsize=(8, 6))
+        return MatplotVisualizer(figsize=(8, 6))
 
     @pytest.fixture
     def sample_poses(self) -> list[CameraPose]:
@@ -35,16 +36,16 @@ class TestVisualOdometryVisualizer:
         return landmarks
 
     def test_initialization(self) -> None:
-        """Test VisualOdometryVisualizer initialization."""
-        viz = Visualizer(figsize=(10, 8))
+        """Test MatplotVisualizer initialization."""
+        viz = MatplotVisualizer(figsize=(10, 8))
         assert viz.figsize == (10, 8)
 
         # Test default figsize
-        viz_default = Visualizer()
+        viz_default = MatplotVisualizer()
         assert viz_default.figsize == (12, 8)
 
     def test_plot_3d_trajectory(
-        self, visualizer: Visualizer, sample_poses: list[CameraPose]
+        self, visualizer: MatplotVisualizer, sample_poses: list[CameraPose]
     ) -> None:
         """Test 3D trajectory plotting."""
         fig = visualizer.plot_3d_trajectory(
@@ -56,13 +57,14 @@ class TestVisualOdometryVisualizer:
         ax = fig.gca()
         assert ax.get_xlabel() == "X (m)"
         assert ax.get_ylabel() == "Y (m)"
-        assert ax.get_zlabel() == "Z (m)"
+        # For 3D axes, check z-label exists
+        assert hasattr(ax, "get_zlabel") and ax.get_zlabel() == "Z (m)"
         assert ax.get_title() == "Test Trajectory"
 
         plt.close(fig)
 
     def test_plot_trajectory_comparison(
-        self, visualizer: Visualizer, sample_poses: list[CameraPose]
+        self, visualizer: MatplotVisualizer, sample_poses: list[CameraPose]
     ) -> None:
         """Test trajectory comparison plotting."""
         # Create slightly different poses for "estimated"
@@ -85,7 +87,7 @@ class TestVisualOdometryVisualizer:
         plt.close(fig)
 
     def test_plot_trajectory_comparison_ground_truth_only(
-        self, visualizer: Visualizer, sample_poses: list[CameraPose]
+        self, visualizer: MatplotVisualizer, sample_poses: list[CameraPose]
     ) -> None:
         """Test trajectory plotting with ground truth only."""
         fig = visualizer.plot_trajectory_comparison(
@@ -96,7 +98,7 @@ class TestVisualOdometryVisualizer:
         plt.close(fig)
 
     def test_plot_landmarks(
-        self, visualizer: Visualizer, sample_landmarks: np.ndarray
+        self, visualizer: MatplotVisualizer, sample_landmarks: np.ndarray
     ) -> None:
         """Test landmark plotting."""
         fig = visualizer.plot_landmarks(
@@ -111,7 +113,7 @@ class TestVisualOdometryVisualizer:
 
     def test_plot_scene_overview(
         self,
-        visualizer: Visualizer,
+        visualizer: MatplotVisualizer,
         sample_landmarks: np.ndarray,
         sample_poses: list[CameraPose],
     ) -> None:
@@ -126,13 +128,8 @@ class TestVisualOdometryVisualizer:
 
         plt.close(fig)
 
-    def test_plot_synthetic_image(self, visualizer: Visualizer) -> None:
+    def test_plot_synthetic_image(self, visualizer: MatplotVisualizer) -> None:
         """Test synthetic image plotting."""
-
-        pose = CameraPose(
-            position=np.array([0.0, 0.0, 0.0]),
-            orientation=np.array([1.0, 0.0, 0.0, 0.0]),
-        )
 
         observations = [
             FeatureObservation(1, np.array([100.0, 200.0]), np.array([1.0, 2.0, 3.0])),
@@ -149,7 +146,7 @@ class TestVisualOdometryVisualizer:
         plt.close(fig)
 
     def test_plot_trajectory_error(
-        self, visualizer: Visualizer, sample_poses: list[CameraPose]
+        self, visualizer: MatplotVisualizer, sample_poses: list[CameraPose]
     ) -> None:
         """Test trajectory error plotting."""
         # Create slightly different poses for "estimated"
@@ -177,7 +174,7 @@ class TestVisualOdometryVisualizer:
         plt.close(fig2)
 
     def test_save_figure(
-        self, visualizer: Visualizer, sample_poses: list[CameraPose]
+        self, visualizer: MatplotVisualizer, sample_poses: list[CameraPose]
     ) -> None:
         """Test figure saving functionality."""
         fig = visualizer.plot_3d_trajectory(sample_poses, title="Test Save")
@@ -194,7 +191,7 @@ class TestVisualOdometryVisualizer:
         plt.close(fig)
 
     def test_trajectory_error_mismatched_lengths(
-        self, visualizer: Visualizer, sample_poses: list[CameraPose]
+        self, visualizer: MatplotVisualizer, sample_poses: list[CameraPose]
     ) -> None:
         """Test trajectory error with mismatched pose list lengths."""
         # Create shorter estimated poses list
@@ -209,7 +206,3 @@ class TestVisualOdometryVisualizer:
 
         plt.close(fig1)
         plt.close(fig2)
-
-
-# Import matplotlib for cleanup
-import matplotlib.pyplot as plt

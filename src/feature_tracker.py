@@ -688,3 +688,55 @@ class FeatureTracker:
             selection_mask &= temp_mask
 
         return distance_filtered, selection_mask
+
+    @staticmethod
+    def draw_features(
+        image: np.ndarray,
+        pts_2d: np.ndarray,
+        pts_2d_ids: np.ndarray,
+        color: Tuple[int, int, int] = (255, 255, 0),
+        circle_radius: int = 2,
+        circle_thickness: int = -1,
+        font_size: float = 0.4,
+        font_color: Tuple[int, int, int] = (0, 0, 255),
+        font_thickness: int = 1,
+    ) -> np.ndarray:
+        """Draw features on an image.
+
+        Args:
+            image: Image to draw features on.
+            pts_2d: Nx2 array of feature coordinates.
+            pts_2d_ids: N array of feature ids.
+            color: Color of the features.
+            circle_radius: Radius of the features.
+            circle_thickness: Thickness of the features.
+            font_size: Size of the font.
+            font_color: Color of the font.
+            font_thickness: Thickness of the font.
+        Returns:
+            Image with features drawn on it.
+        """
+
+        # Validate inputs
+        ValidationHelper.validate_pts2d(pts_2d)
+        ValidationHelper.validate_ids(pts_2d_ids)
+
+        for p, id in zip(pts_2d, pts_2d_ids):
+            cv2.circle(
+                image,
+                (int(p[0]), int(p[1])),
+                circle_radius,
+                color,
+                circle_thickness,
+            )
+            cv2.putText(
+                image,
+                str(id),
+                (int(p[0]) + 5, int(p[1]) - 5),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_size,
+                font_color,
+                font_thickness,
+            )
+
+        return image
