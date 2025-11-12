@@ -117,7 +117,7 @@ class TestTriangulation:
             if landmark_id in common_ids:
                 print(f"landmark {landmark_id} {landmark.T}")
 
-        points_3d = VisualOdometry.triangulate_points(
+        points_3d, reprojection_error = VisualOdometry.triangulate_points(
             pose_0.rotation_matrix.transpose(),
             pose_0.position.reshape(3, 1),
             pose_1.rotation_matrix.transpose(),
@@ -128,3 +128,4 @@ class TestTriangulation:
         )
 
         assert np.linalg.norm(points_3d - landmarks) < 1e-6
+        assert np.linalg.norm(reprojection_error) < 1e-6

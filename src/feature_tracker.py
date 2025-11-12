@@ -8,14 +8,34 @@ import numpy as np
 from .validation_error import ProcessingError, ValidationError
 from .validation_helper import ValidationHelper
 
-MIN_FEATURES = 70  # minimum features before re-detection
-MAX_FEATURES = 150  # max ORB features per detection
+MIN_FEATURES = 150  # minimum features before re-detection
+MAX_FEATURES = 200  # max ORB features per detection
 MIN_DISTANCE = 10.0  # minimum distance to existing points
+
 
 LK_PARAMS = {
     "winSize": (21, 21),
     "maxLevel": 3,
     "criteria": (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01),
+}
+
+SHI_TOMASI_PARAMS = {
+    "maxCorners": 200,
+    "qualityLevel": 0.01,
+    "minDistance": 7,
+    "blockSize": 3,
+    "useHarrisDetector": False,
+    "k": 0.04,
+}
+
+ORB_PARAMS = {
+    "scaleFactor": 1.2,
+    "nlevels": 8,
+    "edgeThreshold": 31,
+    "firstLevel": 0,
+    "WTA_K": 2,
+    "scoreType": cv2.ORB_HARRIS_SCORE,
+    "fastThreshold": 40,
 }
 
 
@@ -92,10 +112,16 @@ class FeatureTracker:
             - descriptors: ORB descriptors for selected features, shape (N, 32)
             - selection_mask: Boolean mask indicating which detected features were selected
         """
+
+        # Detect ORB features
         keypoints, descriptors = self.detect_orb_features(
             image,
             max_features=3 * MAX_FEATURES,
         )
+
+        # Alternative method: Detect Shi-Tomasi features
+        # keypoints = self.detect_shi_tomasi_features(image)
+        # descriptors = np.empty((0, 32), dtype=np.uint8)
 
         optimal_keypoints, selection_mask = self.select_optimal_features(
             keypoints,
@@ -103,6 +129,46 @@ class FeatureTracker:
             image.shape[0],
         )
         return optimal_keypoints, descriptors, selection_mask
+
+    def detect_shi_tomasi_features(
+        self, image: np.ndarray, mask: Optional[np.ndarray] = None
+    ) -> np.ndarray:
+        """Detect Shi-Tomasi (good features to track) features in an image.
+
+        Args:
+            image: Grayscale input image.
+            mask: Optional mask to restrict detection to certain regions.
+
+        Returns:
+            Nx2 array of [x,y] coordinates of detected features.
+
+        Raises:
+            ValidationError: If image is invalid.
+            ProcessingError: If feature detection fails.
+        """
+        if not isinstance(image, np.ndarray):
+            raise ValidationError("Image must be a numpy array")
+
+        if image.ndim != 2:
+            raise ValidationError(
+                f"Image must be grayscale (2D), got shape {image.shape}"
+            )
+
+        if image.dtype != np.uint8:
+            raise ValidationError(f"Image must be uint8, got dtype {image.dtype}")
+
+        try:
+            points = cv2.goodFeaturesToTrack(image, mask=mask, **SHI_TOMASI_PARAMS)
+        except Exception as e:
+            raise ProcessingError(f"Shi-Tomasi feature detection failed: {e}")
+
+        if points is None or len(points) == 0:
+            return np.empty((0, 2), dtype=np.float32)
+
+        # Reshape to (N, 2) if needed
+        points = points.squeeze()
+
+        return points.astype(np.float32)
 
     @classmethod
     def validate_image_input(cls, image: np.ndarray) -> None:
@@ -149,7 +215,7 @@ class FeatureTracker:
         self.validate_image_input(image)
 
         try:
-            orb_detector = cv2.ORB_create(nfeatures=max_features)
+            orb_detector = cv2.ORB_create(nfeatures=max_features, **ORB_PARAMS)
             keypoints, descriptors = orb_detector.detectAndCompute(image, mask)
         except Exception as e:
             raise ProcessingError(f"ORB feature detection failed: {e}") from e

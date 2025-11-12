@@ -275,6 +275,107 @@ class TestCameraPose:
         assert "CameraPose" in repr_str
         assert "t" in repr_str
 
+    def test_create_look_at_pose_basic(self) -> None:
+        """Test basic look-at pose creation."""
+        camera_pos = np.array([0.0, 0.0, 0.0])
+        target_pos = np.array([1.0, 0.0, 0.0])
+        timestamp = 1.5
+
+        pose = CameraPose.create_look_at_pose(camera_pos, target_pos, timestamp)
+
+        assert np.allclose(pose.position, camera_pos)
+        assert pose.timestamp == timestamp
+
+        # Camera should face toward target (positive X direction)
+        # With camera at origin looking toward [1,0,0], camera Z should be [1,0,0]
+        # Camera X should be parallel to world X [1,0,0], but since camera Z is already [1,0,0],
+        # it uses world Y [0,1,0] as camera X
+        expected_camera_z = np.array([1.0, 0.0, 0.0])
+        expected_camera_x = np.array(
+            [0.0, 1.0, 0.0]
+        )  # World Y since camera Z parallel to world X
+        expected_camera_y = np.cross(expected_camera_z, expected_camera_x)
+
+        rotation_matrix = pose.rotation_matrix
+        assert np.allclose(
+            rotation_matrix[:, 2], expected_camera_z, atol=1e-6
+        )  # Z column
+        assert np.allclose(
+            rotation_matrix[:, 0], expected_camera_x, atol=1e-6
+        )  # X column
+        assert np.allclose(
+            rotation_matrix[:, 1], expected_camera_y, atol=1e-6
+        )  # Y column
+
+    def test_create_look_at_pose_diagonal(self) -> None:
+        """Test look-at pose with diagonal target direction."""
+        camera_pos = np.array([0.0, 0.0, 0.0])
+        target_pos = np.array([1.0, 1.0, 1.0])
+
+        pose = CameraPose.create_look_at_pose(camera_pos, target_pos)
+
+        # Camera Z should point toward normalized target direction
+        expected_direction = np.array([1.0, 1.0, 1.0]) / np.linalg.norm([1.0, 1.0, 1.0])
+        assert np.allclose(pose.rotation_matrix[:, 2], expected_direction, atol=1e-6)
+
+        # Camera X should be projection of world X onto plane perpendicular to camera Z
+        world_x = np.array([1.0, 0.0, 0.0])
+        camera_z = expected_direction
+        camera_x = world_x - np.dot(world_x, camera_z) * camera_z
+        camera_x = camera_x / np.linalg.norm(camera_x)
+        assert np.allclose(pose.rotation_matrix[:, 0], camera_x, atol=1e-6)
+
+    @pytest.mark.parametrize(
+        "invalid_pos",
+        [
+            [1.0, 2.0, 3.0],  # Python list instead of numpy array
+            np.array([1.0, 2.0]),  # Wrong shape
+            np.array([1.0, 2.0, 3.0, 4.0]),  # Wrong shape
+            np.array([[1.0], [2.0], [3.0]]),  # Wrong shape
+        ],
+    )
+    def test_create_look_at_pose_invalid_positions(
+        self, invalid_pos: np.ndarray
+    ) -> None:
+        """Test create_look_at_pose with invalid position inputs."""
+        valid_pos = np.array([0.0, 0.0, 0.0])
+
+        with pytest.raises(ValidationError, match="must be a 3D numpy array"):
+            CameraPose.create_look_at_pose(invalid_pos, valid_pos)
+
+        with pytest.raises(ValidationError, match="must be a 3D numpy array"):
+            CameraPose.create_look_at_pose(valid_pos, invalid_pos)
+
+    @pytest.mark.parametrize(
+        "invalid_pos",
+        [
+            np.array([float("inf"), 0.0, 0.0]),
+            np.array([0.0, float("-inf"), 0.0]),
+            np.array([0.0, 0.0, float("nan")]),
+        ],
+    )
+    def test_create_look_at_pose_non_finite_positions(
+        self, invalid_pos: np.ndarray
+    ) -> None:
+        """Test create_look_at_pose with non-finite position values."""
+        valid_pos = np.array([0.0, 0.0, 0.0])
+
+        with pytest.raises(ValidationError, match="must contain finite values"):
+            CameraPose.create_look_at_pose(invalid_pos, valid_pos)
+
+        with pytest.raises(ValidationError, match="must contain finite values"):
+            CameraPose.create_look_at_pose(valid_pos, invalid_pos)
+
+    def test_create_look_at_pose_same_position(self) -> None:
+        """Test create_look_at_pose with same camera and target positions."""
+        position = np.array([1.0, 2.0, 3.0])
+
+        with pytest.raises(
+            ValidationError,
+            match="Camera position and target position cannot be the same",
+        ):
+            CameraPose.create_look_at_pose(position, position)
+
 
 class TestTrajectoryGenerator:
     """Test suite for TrajectoryGenerator class."""

@@ -454,6 +454,31 @@ class GeometryUtils:
         )
 
     @staticmethod
+    def quaternion_angle_difference(
+        quat_start: np.ndarray, quat_end: np.ndarray
+    ) -> float:
+        """Calculate the angle difference between two quaternions.
+
+        Args:
+            quat_start (np.ndarray): Start quaternion [w, x, y, z].
+            quat_end (np.ndarray): End quaternion [w, x, y, z].
+
+        Returns:
+            np.ndarray: Angle difference in radians.
+        """
+        # Validate the inputs
+        GeometryUtils.validate_quaternion(quat_start)
+        GeometryUtils.validate_quaternion(quat_end)
+
+        quat_delta = GeometryUtils.quaternion_multiply(
+            quat_end,
+            GeometryUtils.quaternion_inverse(quat_start),
+        )
+        _, angle = GeometryUtils.axis_angle_from_quaternion(quat_delta)
+
+        return angle
+
+    @staticmethod
     def quaternion_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
         """Multiply two quaternions.
 

@@ -126,6 +126,84 @@ class CameraPose:
 
         return cls(position, quaternion, timestamp)
 
+    @staticmethod
+    def create_look_at_pose(
+        camera_position: np.ndarray, target_position: np.ndarray, timestamp: float = 0.0
+    ) -> "CameraPose":
+        """Create a camera pose that points toward a target position.
+
+        The camera's Z-axis will point toward the target position, and the camera's
+        X-axis will be parallel to the world frame's X-axis.
+
+        Args:
+            camera_position (np.ndarray): 3D position of the camera (x, y, z).
+            target_position (np.ndarray): 3D position of the target to look at (x, y, z).
+            timestamp (float): Timestamp for this pose. Defaults to 0.0.
+
+        Returns:
+            CameraPose: Camera pose with the specified orientation.
+
+        Raises:
+            ValidationError: If inputs are invalid.
+        """
+        # Validate inputs
+        for pos_name, pos in [
+            ("camera_position", camera_position),
+            ("target_position", target_position),
+        ]:
+            if not isinstance(pos, np.ndarray) or pos.shape != (3,):
+                raise ValidationError(
+                    f"{pos_name} must be a 3D numpy array, got {pos.shape if isinstance(pos, np.ndarray) else type(pos)}"
+                )
+            if not np.all(np.isfinite(pos)):
+                raise ValidationError(f"{pos_name} must contain finite values")
+
+        # Check if camera and target positions are the same
+        if np.allclose(camera_position, target_position):
+            raise ValidationError(
+                "Camera position and target position cannot be the same"
+            )
+
+        # Direction vector from camera to target
+        direction = target_position - camera_position
+        direction = GeometryUtils.normalize_vector(direction)
+
+        # Camera Z-axis points toward target (in camera coordinates, +Z is forward)
+        camera_z = direction
+
+        # Camera X-axis should be parallel to world X-axis [1, 0, 0]
+        world_x = np.array([1.0, 0.0, 0.0])
+
+        # Check if camera_z is parallel to world_x (degenerate case)
+        if np.allclose(np.abs(np.dot(camera_z, world_x)), 1.0):
+            # If camera_z is parallel to world_x, we need a different approach
+            # Use world Y-axis as the reference direction
+            world_y = np.array([0.0, 1.0, 0.0])
+            camera_x = world_y
+        else:
+            # Project world X onto plane perpendicular to camera_z
+            camera_x = world_x - np.dot(world_x, camera_z) * camera_z
+            camera_x = GeometryUtils.normalize_vector(camera_x)
+
+        # Camera Y-axis is cross product of Z and X (right-hand rule)
+        # Y = Z × X, so that X × Y = Z (forward direction)
+        camera_y = np.cross(camera_z, camera_x)
+
+        # Construct rotation matrix (camera to world transformation)
+        # Columns are the camera axes expressed in world coordinates
+        rotation_matrix = np.column_stack([camera_x, camera_y, camera_z])
+
+        # Convert to quaternion
+        quaternion = GeometryUtils.quaternion_from_rotation_matrix(rotation_matrix)
+
+        return CameraPose(camera_position, quaternion, timestamp)
+
+    def copy(self) -> "CameraPose":
+        """Create a copy of the camera pose."""
+        return CameraPose(
+            self.position.copy(), self.orientation_quaternion.copy(), self.timestamp
+        )
+
     def __repr__(self) -> str:
         """String representation of the camera pose."""
         timestamp_str = (
@@ -167,6 +245,7 @@ class TrajectoryGenerator:
         start_angle: float = 0.0,
         angular_velocity: float = 1.0,
         look_at_center: bool = True,
+        orientation_offset: Optional[np.ndarray] = None,
     ) -> List[CameraPose]:
         """Generate a circular camera trajectory.
 
@@ -178,6 +257,7 @@ class TrajectoryGenerator:
             start_angle (float): Starting angle in radians. Defaults to 0.
             angular_velocity (float): Angular velocity in rad/s. Defaults to 1.0.
             look_at_center (bool): If True, camera always looks at the center. Defaults to True.
+            orientation_offset (Optional[np.ndarray]): Offset to the orientation quaternion. Defaults to None.
 
         Returns:
             List[CameraPose]: List of camera poses along the trajectory.
@@ -228,6 +308,14 @@ class TrajectoryGenerator:
                 yaw = tangent_angle
                 quaternion = GeometryUtils.quaternion_from_axis_angle(
                     np.array([0.0, 0.0, 1.0]), yaw
+                )
+
+            # Apply orientation offset
+            if orientation_offset is not None:
+                GeometryUtils.validate_quaternion(orientation_offset)
+                quaternion = GeometryUtils.quaternion_multiply(
+                    quaternion,
+                    orientation_offset,
                 )
 
             pose = CameraPose(position, quaternion, timestamp)
