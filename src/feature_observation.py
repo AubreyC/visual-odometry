@@ -7,6 +7,8 @@ import numpy as np
 
 from validation_helper import ValidationHelper
 
+from .camera import PinHoleCamera
+
 
 class Points2D:
     def __init__(self, points_2d: np.ndarray, ids: np.ndarray):
@@ -54,6 +56,18 @@ class ImageFeatures:
 
     def get_points_2d(self) -> Points2D:
         return self.points_2d
+
+    @classmethod
+    def from_points_3d(
+        cls,
+        timestamp: float,
+        camera_id: int,
+        camera: PinHoleCamera,
+        points_3d: np.ndarray,
+        ids: np.ndarray,
+    ) -> "ImageFeatures":
+        points_2d = camera.project(points_3d)
+        return cls(timestamp, camera_id, Points2D(points_2d, ids))
 
 
 class FeatureObservation:

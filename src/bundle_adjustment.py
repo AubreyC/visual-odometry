@@ -2,6 +2,7 @@ from typing import List, Tuple
 
 import numpy as np
 
+from .camera import PinHoleCamera
 from .camera_pose import CameraPose
 from .feature_observation import ImageFeatures, Points3D
 from .geometry_utils import GeometryUtils
@@ -105,7 +106,27 @@ def run_bundle_adjustment() -> None:
         ),
     ]
 
-    # Ima
+    # Camera model:
+    camera_model = PinHoleCamera(
+        fx=1000.0,
+        fy=1000.0,
+        cx=320.0,
+        cy=240.0,
+    )
+
+    # Render images:
+    camera_id = 0
+    image_features = []
+    for camera_pose in camera_poses:
+        image_features.append(
+            ImageFeatures.from_points_3d(
+                camera_pose.timestamp,
+                camera_id,
+                camera_model,
+                landmarks,
+                np.arange(len(landmarks)),
+            )
+        )
 
     # Bundle adjustment:
     bundle_adjustment = BundleAdjustment()
