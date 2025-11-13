@@ -1,208 +1,94 @@
-# Visual Inertial Odometry and SLAM
+# Visual Odometry, Visual Inertial Odometry and SLAM playground
 
-This repository presents notes and material on the topic on visual intertial odometry.
+[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**Most notable methodologies:**
-- MSCKF
-- ROVIO
-- OKVIS
-- VINS-Mono
-- Visual-Inertial Monocular SLAM with Map Reuse uses “On-Manifold Preintegration for Real-Time Visual-Inertial Odometry"
+This repository presents somes notes and material on the topic on visual odometry, visual inertial odometry and SLAM.
+It is a simple playground to experiment and implement visual inertial odometry and SLAM algorithm:
+- simple simulation environment
+- boiler-plate to run algorithm on popular datasets (EuroC, etc)
+- implementation of some popular methodology
 
-**Implemented:**
-- [] MSCKF
-- [] Non-Linear bundle adjustment
-- [] On-Manifold Preintegration for Real-Time Visual-Inertial Odometry
+![Gif Demo](demos/euroc_mav0_demo.gif)
+
+## Current status:
+
+**To Do:**
+- [X] Feature tracking simulator
+- [X] Simple feature tracking module based on ORB features and KLT tracking
+- [X] Simple visual odometry with epipolar geometry
+- [ ] Non-Linear bundle adjustment
+- [ ] MSCKF
+- [ ] On-Manifold Preintegration for Real-Time Visual-Inertial Odometry
+
+**Topic to focus**
+- [ ] Epipolar geometry
+- [ ] Lie Group for robotics and estimation
 
 ## Litterature review
 
-### MSCKF 
+Here are the most notable methodologies:
+- **MSCKF**: Mourikis & Roumeliotis - "A Multi-State Constraint Kalman Filter for Vision-aided Inertial Navigation" (ICRA 2007)
+- **ROVIO**: Bloesch et al. - "Robust visual inertial odometry using a direct EKF-based approach" (IROS 2015)
+- **OKVIS**: Leutenegger et al. - "Keyframe-based visual-inertial odometry using nonlinear optimization" (IJRR 2015)
+- **VINS-Mono**: Qin et al. - "VINS-Mono: A Robust and Versatile Monocular Visual-Inertial State Estimator" (TRO 2018)
+- **On-Manifold Preintegration for Real-Time Visual-Inertial Odometry**: Forster et al - "On-Manifold Preintegration Theory for Fast and Accurate Visual-Inertial Navigation" (CoRR 2015)
 
-[A Multi-State Constraint Kalman Filter for Vision-aided Inertial Navigation Anastasios I. Mourikis and Stergios I. Roumeliotis](https://intra.ece.ucr.edu/~mourikis/papers/MourikisRoumeliotis-ICRA07.pdf)
+## Comparative Summary
 
-**Methodology:**
-- State: IMU + Position of the camera at image frames
-- Process: IMU equations
-- Measurements:
-    - Constraints from a visual feature oberved in multiple frame
-    - Least-Square estimation to estimate this feature location in inertial frame
-    - Use this to reproject on image frame for each frame
-    - Residual: reprojected position vs measurement position (with some tricks to eliminate the fact that the estimate state is used to estimate the feature position in inertial frame)
+| **Method** | **Type** | **Optimization / Filter** | **State Variables** | **Visual Model** | **IMU Handling** | **Key Features / Notes** |
+|-------------|-----------|---------------------------|---------------------|------------------|------------------|---------------------------|
+| **MSCKF** | VIO | EKF-based Filter | IMU + recent camera poses | Feature-based (tracked features) | Propagation with IMU equations | Efficient but delayed feature inclusion |
+| **On-Manifold Preintegration** | VIO | Non-linear Optimization | Keyframe pose, velocity, orientation | Structureless model | IMU preintegration on manifold | Clean formulation, widely used |
+| **VIO SLAM with Map Reuse** | SLAM | Non-linear Optimization + Bundle Adjustment | Pose, velocity, biases | Reprojection of tracked features | IMU integrated and optimized | Real-time tracking + background BA |
+| **ROVIO** | VIO | EKF-based Filter | Full IMU + limited visual landmarks | Patch-intensity based | Continuous IMU propagation | Robust to lighting, tightly coupled |
 
-**Notes:**
-- Eq: (13) Do the Math with the full state Pdot = F*P + P*F^T + G*Q*G^T but with F = [F1, 0; 0; 0] because the rest of the state are position and velocity of the previous image frames (constant in time)
+## References
 
-**Limitations:**
-- Need to wait until a feature is not tracked anymore to add it to the filter (measuremens mices all the observations in one measurement after it is done being observed)
+### Core VIO/SLAM Papers
+- **MSCKF**: [Mourikis & Roumeliotis - "A Multi-State Constraint Kalman Filter for Vision-aided Inertial Navigation" (ICRA 2007)](https://intra.ece.ucr.edu/~mourikis/papers/MourikisRoumeliotis-ICRA07.pdf)
+- **ROVIO**: [Bloesch et al. - "Robust visual inertial odometry using a direct EKF-based approach" (IROS 2015)](https://ieeexplore.ieee.org/document/7353768)
+- **OKVIS**: [Leutenegger et al. - "Keyframe-based visual-inertial odometry using nonlinear optimization" (IJRR 2015)](https://www.doc.ic.ac.uk/~sleutene/publications/ijrr2014_revision_1.pdf)
+- **VINS-Mono**: [Qin et al. - "VINS-Mono: A Robust and Versatile Monocular Visual-Inertial State Estimator" (TRO 2018)](https://arxiv.org/pdf/1708.03852)
 
-**Related methods / Papers:**
-- Robust Stereo Visual Inertial Odometry for Fast Autonomous Flight
+### Theoretical Foundations
+- **Graph-based SLAM**: Grisetti et al. - "A Tutorial on Graph-based SLAM" (ITSM 2010)
+- **Factor Graphs**: Dellaert - "Factor Graphs and GTSAM: A Hands-on Introduction" (Tech Report 2012)
+- **On-Manifold Preintegration**: [Forster et al. - "On-Manifold Preintegration for Real-Time Visual-Inertial Odometry" (TRO 2017)](https://arxiv.org/pdf/1512.02363.pdf)
 
-## On-Manifold Preintegration for Real-Time Visual-Inertial Odometry
+### Survey & Review Papers
+- **VI Navigation Review**: Huang - "Visual-inertial navigation: a concise review" (ICRA 2019)
+- **VI Sensor Fusion**: Kelly & Sukhatme - "Visual-inertial sensor fusion: Localization, mapping and sensor-to-sensor self-calibration" (IJRR 2011)
+- **SLAM Developments**: Dissanayake et al. - "A review of recent developments in Simultaneous Localization and Mapping" (ICIIS 2011)
 
-[On-Manifold Preintegration for Real-Time Visual-Inertial Odometry](https://arxiv.org/pdf/1512.02363)
+### Advanced Topics
+- **Consistency Analysis**: Kottas et al. - "On the consistency of vision-aided inertial navigation" (ISER 2012)
+- **Multi-sensor Calibration**: Furgale et al. - "Unified temporal and spatial calibration for multi-sensor systems" (IROS 2013)
+- **Lie Group Dynamics**: Park et al. - "A lie group formulation of robot dynamics" (IJRR 1995)
 
-**Methodology:**
-- IMU data and Images
-- Select KeyFrame at which we want to estimate state [pos, vel, orientation]
-- Inertial:
-    - In between keyframe define IMU preintegration on Manifold
-- Vision:
-    - Structureless Vision Model
-    - Does not uses the actual feature points
-- Non-linear optimization of this
+### Dense Reconstruction
+- **REMODE**: Pizzoli et al. - "REMODE: Probabilistic, Monocular Dense Reconstruction in Real Time" (ICRA 2014)
 
-Questions:
-- Feature point position in inertial frame not computed ???
+## Books & References
 
-## Visual-Inertial Monocular SLAM with Map Reuse
-
-[Visual-Inertial Monocular SLAM with Map Reuse](https://arxiv.org/pdf/1610.05949v1)
-
-**Methodology:**
-- Background thread:
-    - Compute Bundle Adjustment to find feature point position in intertial frame
-- Tracking (real-time tracker):
-    - Integrate the IMU data
-    - Non linear optimization: the last frame position to minimize error from IMU & error from feature points (reprojected)
-        - State (position, velocity, accel bias, gyro bias)
-        - Cost:
-            - Visual: Reprojection error of the feature point onto image plane
-            - IMU: Error between state (variable to optimize) and "predicted" state from IMU integration
-
-Related methods / Papers:
-- `On-Manifold Preintegration for Real-Time Visual-Inertial Odometry`
-
-## ROVIO
-
-[M. Bloesch, S. Omari, M. Hutter, and R. Siegwart, “Robust visual inertial odometry using a direct ekf-based approach,” in Ieee/rsj International Conference on Intelligent Robots and Systems, 2015](https://github.com/MichaelBeechan/VO-SLAM-Review/blob/master/%5BVIO%5D%20Robust%20Visual%20Inertial%20Odometry%20Using%20a%20Direct%20EKF-Based%20Approach.pdf)
-
-**Methodology:**
-- EKF filter:
-    - IMU state: position, orientation, velocity, accel bias, gyro bias
-    - Visual features expressed in Vehicle state with bearing and distance (up to N to keep the size of the state manageable)
-- Visual feature:
-    - Selected based on gradient itensity (some heuristics to select then)
-    - "Patch" region is selected around this feature
-- Propagattion:
-    - Propagate the state according to the IMU input
-    - Propagate the visual feature 
-- Update:
-    - Residual is Observed patch intensities − Predicted patch intensities 
-    - Predicted patch intensities: projected pixel location in the reference (or keyframe) patch, warped according to the predicted transform from the estimated pose and landmark depth.
-
-Note: `Iterated EKF with direct photometric feedback, Bloesch et al. 2017` provides more details.
-
-## OKVIS
-
-[Stefan Leutenegger, Simon Lynen, Michael Bosse, Roland Siegwart and Paul Timothy Furgale. Keyframe-based visual–inertial odometry using nonlinear optimization. The International Journal of Robotics Research, 2015.](https://www.doc.ic.ac.uk/~sleutene/publications/ijrr2014_revision_1.pdf)
-
-## Slambook
-
-
-## Past, Present, and Future of Simultaneous Localization And Mapping: Towards the Robust-Perception Age
-
-Question:
-- Since maximizing the posterior is the same as minimizing the negative log-posterior ?
-- Note that the formulation (4) follows from the assumption of Normally distributed noise:
-    - Other assumptions for the noise distribution lead to different cost functions;
-    - For instance, if the noise follows a Laplace distribution, the squared l2 norm in (4) is replaced by the l1 norm
-
-Graph optimization for pose estimation:
-- Node: Pose of the camera
-- Vertice: Measurement, external information (sensor, etc)
-
-## VINS-Mono
-
-This is a full system:
-- Initialization
-- Visualt Odometry based on sliding window method
-- Global pose estimation based on graph optimization
-
-Visual Inertial Odometry:
-- bundle adjustment based on a sliding window method
-- visual feature projected on a sphere tangent plane
-- pre-integrated IMU data (?)
-
-Global optimization:
-- 
-
-##
-
-https://www.doc.ic.ac.uk/~sleutene/publications/ijrr2014_revision_1.pdf
-
-## Visual-Inertial Monocular SLAM with Map Reuse
-
-## Books
-
-- STATE ESTIMATION FOR ROBOTICS - Timothy D. Barfoot (http://asrl.utias.utoronto.ca/~tdb/bib/barfoot_ser17.pdf)
-
-## Reference
-
-- A. I. Mourikis and S. I. Roumeliotis. A Multi-State Constraint Kalman
-Filter for Vision-aided Inertial Navigation. In Proceedings of the IEEE
-International Conference on Robotics and Automation (ICRA), pages
-3565–3572. IEEE, 2007.
-
-- S. Lynen, T. Sattler, M. Bosse, J. Hesch, M. Pollefeys, and R. Siegwart.
-Get out of my lab: Large-scale, real-time visual-inertial localization.
-In Proceedings of Robotics: Science and Systems Conference (RSS),
-pages 338–347, 2015
-
-Maximum A Posteriori:
-
-- G. Grisetti, R. K¨ummerle, C. Stachniss, and W. Burgard. A Tutorial
-on Graph-based SLAM. IEEE Intelligent Transportation Systems
-Magazine, 2(4):31–43, 2010
-- F. Dellaert. Factor Graphs and GTSAM: A Hands-on Introduction.
-Technical Report GT-RIM-CP&R-2012-002, Georgia Institute of Tech-
-nology, Sept. 2012
-
-
-- M. Pizzoli, C. Forster, and D. Scaramuzza. REMODE: Probabilistic,
-Monocular Dense Reconstruction in Real Time. In Proceedings of the
-IEEE International Conference on Robotics and Automation (ICRA),
-pages 2609–2616. IEEE, 2014.
-
-- G. Dissanayake, S. Huang, Z. Wang, and R. Ranasinghe. A review
-of recent developments in Simultaneous Localization and Mapping. In
-International Conference on Industrial and Information Systems, pages
-477–482. IEEE, 2011
-
-- Z. Wang, S. Huang, and G. Dissanayake. Simultaneous Localization
-and Mapping: Exactly Sparse Information Filters. World Scientific,
-2011
-
-- A. P´azman. Foundations of Optimum Experimental Design. Springer,
-1986.
-
-- Huang G (2019) Visual-inertial navigation: A concise review. In: IEEE Int. Conf. Robot. Autom.
-(ICRA)
-
-- Kottas DG, Hesch JA, Bowman SL, Roumeliotis SI (2012) On the consistency of vision-aided
-inertial navigation. In: Int. Symp. Experimental Robotics 
-
-- Kelly J, Sukhatme GS (2011) Visual-inertial sensor fusion: Localization, mapping and sensor-to-
-sensor self-calibration. Int J Robot Research 30(1):56–79, DOI 10.1177/0278364910382802
-
-- Kelly J, Sukhatme GS (2011) Visual-inertial sensor fusion: Localization, mapping and sensor-to-
-sensor self-calibration. Int J Robot Research 30(1):56–79, DOI 10.1177/0278364910382802
-
-- Furgale P, Rehder J, Siegwart R (2013) Unified temporal and spatial calibration for multi-sensor
-systems. In: IEEE/RSJ Int. Conf. Intell. Robot. Syst. (IROS)
-
-- F. C. Park, J. E. Bobrow, and S. R. Ploen, “A lie group formulation
-of robot dynamics,” The International Journal of Robotics Research,
-vol. 14, no. 6, pp. 609–618, 1995.
-
-- F. Bullo and A. D. Lewis, Geometric control of mechanical systems:
-modeling, analysis, and design for simple mechanical control systems,
-vol. 49. Springer Science & Business Media, 2004
+- **[State Estimation for Robotics](http://asrl.utias.utoronto.ca/~tdb/bib/barfoot_ser17.pdf)** - Timothy D. Barfoot
+- **[Introducation to Visual SLAM - From Theory to Practice](https://github.com/gaoxiang12/slambook-en)** - Xiang Gao and Tao Zhang 
+- **[Geometric Control of Mechanical Systems](https://link.springer.com/book/10.1007/978-1-4899-7276-7)** - Bullo & Lewis (2004)
+- **Simultaneous Localization and Mapping: Exactly Sparse Information Filters** - Wang, Huang, Dissanayake (2011)
 
 ## Dataset
 
-## Tools and Implementation
+- **[EuRoC MAV Dataset](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets)** - Micro Aerial Vehicle datasets with stereo cameras + IMU
+- **[TUM VI Dataset](https://vision.in.tum.de/data/datasets/visual-inertial-dataset)** - Visual-Inertial datasets for benchmarking
+- **[KAIST Urban Dataset](http://irap.kaist.ac.kr/dataset/)** - Large-scale urban visual-inertial datasets
+- **[UZH-FPV Drone Racing](https://fpv.ifi.uzh.ch/)** - High-speed drone racing datasets
 
-- https://gitlab.com/VladyslavUsenko/basalt
-- https://github.com/daniilidis-group/msckf_mono
-- https://github.com/KumarRobotics/msckf_vio?tab=readme-ov-file
+## Implementations:
+- **[VINS-Mono](https://github.com/HKUST-Aerial-Robotics/VINS-Mono)** - Robust monocular visual-inertial state estimator
+- **[ORBSLAM3](https://github.com/UZ-SLAMLab/ORB_SLAM3)** - Feature-based SLAM supporting monocular, stereo, RGB-D
+- **[Basalt](https://gitlab.com/VladyslavUsenko/basalt)** - Visual-Inertial Mapping with Rolling Shutter Cameras
+- **[ROVIO](https://github.com/ethz-asl/rovio)** - Robust Visual Inertial Odometry framework
+- **[MSCKF_VIO](https://github.com/KumarRobotics/msckf_vio)** - Multi-State Constraint Kalman Filter for VIO
+- **[msckf_mono](https://github.com/daniilidis-group/msckf_mono)** - Monocular MSCKF implementation
+- **[OKVIS](https://github.com/ethz-asl/okvis)** - Open Keyframe-based Visual-Inertial SLAM
+- **[Kimera](https://github.com/MIT-SPARK/Kimera)** - Multi-robot SLAM system with VIO

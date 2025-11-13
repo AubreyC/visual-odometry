@@ -33,7 +33,7 @@ def main() -> None:
     # Create OpenCV scene visualizer for real-time 3D visualization
     scene_camera_pose = CameraPose.create_look_at_pose(
         camera_position=np.array([-10.0, -10.0, 8.0]),
-        target_position=np.array([0.0, 0.0, 5.0]),
+        target_position=np.array([0.0, -5.0, 8.0]),
         timestamp=0.0,
     )
     opencv_visualizer = OpenCVSceneVisualizer(
@@ -118,7 +118,7 @@ def main() -> None:
             # Show results
             image = OpenCVSceneVisualizer.merge_images([image_features, image_scene])
             cv2.imshow("Feature Tracking and 3D Scene", image)
-            key = cv2.waitKey(0)
+            key = cv2.waitKey(1)
             if key & 0xFF == ord("w"):
                 break
 
