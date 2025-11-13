@@ -29,7 +29,8 @@
       *(with some tricks to eliminate the fact that the estimated state is used to estimate the feature position in the inertial frame)*
 
 ### Notes
-- Equation (13): Perform the math with the full state  
+- Equation (13): Perform the math with the full state
+
   $$
   \dot{P} = F P + P F^T + G Q G^T
   $$  
