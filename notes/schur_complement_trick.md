@@ -139,7 +139,7 @@ $$
 
 - **Faster optimization**: Only camera poses are solved in the reduced system.  
 - **Numerically stable**: Reduces ill-conditioning from many points.  
-- **Memory efficient**: Exploits sparsity of $ H_{pp} $.q
+- **Memory efficient**: Exploits sparsity of $ H_{pp} $.
 - Widely used in:
   - Bundle Adjustment (BA)
   - Keyframe-based VO (e.g., ORB-SLAM, VINS-Mono)

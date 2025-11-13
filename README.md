@@ -3,11 +3,11 @@
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-This repository presents somes notes and material on the topic on visual odometry, visual inertial odometry and SLAM.
-It is a simple playground to experiment and implement visual inertial odometry and SLAM algorithm:
+This repository presents some notes and material on the topic of visual odometry, visual inertial odometry and SLAM.
+It is a simple playground to experiment and implement visual inertial odometry and SLAM algorithms:
 - simple simulation environment
-- boiler-plate to run algorithm on popular datasets (EuroC, etc)
-- implementation of some popular methodology
+- boilerplate to run algorithm on popular datasets (EuroC, etc)
+- implementation of some popular methodologies
 
 ![Gif Demo](demos/euroc_mav0_demo.gif)
 
@@ -21,11 +21,11 @@ It is a simple playground to experiment and implement visual inertial odometry a
 - [ ] MSCKF
 - [ ] On-Manifold Preintegration for Real-Time Visual-Inertial Odometry
 
-**Topic to focus**
+**Topics**
 - [ ] Epipolar geometry
 - [ ] Lie Group for robotics and estimation
 
-## Litterature review
+## Literature review
 
 Here are the most notable methodologies:
 - **MSCKF**: Mourikis & Roumeliotis - "A Multi-State Constraint Kalman Filter for Vision-aided Inertial Navigation" (ICRA 2007)
@@ -72,11 +72,11 @@ Here are the most notable methodologies:
 ## Books & References
 
 - **[State Estimation for Robotics](http://asrl.utias.utoronto.ca/~tdb/bib/barfoot_ser17.pdf)** - Timothy D. Barfoot
-- **[Introducation to Visual SLAM - From Theory to Practice](https://github.com/gaoxiang12/slambook-en)** - Xiang Gao and Tao Zhang 
+- **[Introduction to Visual SLAM - From Theory to Practice](https://github.com/gaoxiang12/slambook-en)** - Xiang Gao and Tao Zhang 
 - **[Geometric Control of Mechanical Systems](https://link.springer.com/book/10.1007/978-1-4899-7276-7)** - Bullo & Lewis (2004)
 - **Simultaneous Localization and Mapping: Exactly Sparse Information Filters** - Wang, Huang, Dissanayake (2011)
 
-## Dataset
+## Datasets
 
 - **[EuRoC MAV Dataset](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets)** - Micro Aerial Vehicle datasets with stereo cameras + IMU
 - **[TUM VI Dataset](https://vision.in.tum.de/data/datasets/visual-inertial-dataset)** - Visual-Inertial datasets for benchmarking

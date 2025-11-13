@@ -1,4 +1,4 @@
-# Papers notes
+# Papers Notes
 
 ## References
 - Mourikis & Roumeliotis, *MSCKF (2007)*  
