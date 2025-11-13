@@ -16,10 +16,10 @@ pip install -r requirements-dev.txt
 ## 2. What Ruff Replaces
 
 **Ruff replaces:**
-- ✅ Black (formatting)
-- ✅ isort (import sorting)
-- ✅ Flake8 (linting)
-- ✅ pyupgrade, autoflake, and more
+- Black (formatting)
+- isort (import sorting)
+- Flake8 (linting)
+- pyupgrade, autoflake, and more
 
 **Keep:**
 - pytest (testing framework)
@@ -340,24 +340,3 @@ pre-commit install
 # 5. Run all checks
 make all  # or run commands individually
 ```
-
-## Benefits of Using Ruff
-
-✅ **10-100x faster** than Black, isort, and Flake8 combined
-✅ **Single tool** replaces 3+ tools
-✅ **Drop-in replacement** for Black/isort (same formatting)
-✅ **Better error messages** and auto-fixes
-✅ **Active development** by Astral (makers of uv)
-✅ **Built in Rust** - incredibly fast
-✅ **Comprehensive rules** - 700+ lint rules available
-
-## VSCode Features You'll Get
-
-✓ **Auto-format on save** with Ruff
-✓ **Auto-sort imports** on save with Ruff
-✓ **Real-time linting** with auto-fixes from Ruff
-✓ **Type checking** inline with Mypy
-✓ **Visual test runner** - click to run individual tests
-✓ **Code coverage** visualization
-✓ **Debugging** with breakpoints
-✓ **IntelliSense** with type hints
