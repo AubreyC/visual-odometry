@@ -9,7 +9,7 @@ It is a simple playground to experiment and implement visual inertial odometry a
 - boilerplate to run algorithm on popular datasets (EuroC, etc)
 - implementation of some popular methodologies
 
-![Gif Demo](demos/euroc_mav0_demo.gif)
+![euroc](demos/euroc_mav0_demo.gif)
 
 ## Current status:
 
@@ -22,7 +22,7 @@ It is a simple playground to experiment and implement visual inertial odometry a
 - [ ] On-Manifold Preintegration for Real-Time Visual-Inertial Odometry
 
 **Topics**
-- [ ] Epipolar geometry
+- [X] Epipolar geometry
 - [ ] Lie Group for robotics and estimation
 
 ## Literature review
