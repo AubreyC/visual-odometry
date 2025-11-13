@@ -5,6 +5,56 @@ from typing import Any, Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
+from validation_helper import ValidationHelper
+
+
+class Points2D:
+    def __init__(self, points_2d: np.ndarray, ids: np.ndarray):
+        # Validate input: points_2d and ids must be numpy arrays
+        ValidationHelper.validate_pts2d(points_2d)
+        ValidationHelper.validate_ids(ids)
+
+        self.points_2d = points_2d
+        self.ids = ids
+
+    def get_points_2d(self) -> np.ndarray:
+        return self.points_2d.copy()
+
+    def get_ids(self) -> np.ndarray:
+        return self.ids.copy()
+
+
+class Points3D:
+    def __init__(self, points_3d: np.ndarray, ids: np.ndarray):
+        # Validate input: points_3d and ids must be numpy arrays
+        ValidationHelper.validate_pts3d(points_3d)
+        ValidationHelper.validate_ids(ids)
+
+        self.points_3d = points_3d
+        self.ids = ids
+
+    def get_points_3d(self) -> np.ndarray:
+        return self.points_3d.copy()
+
+    def get_ids(self) -> np.ndarray:
+        return self.ids.copy()
+
+
+class ImageFeatures:
+    def __init__(self, timestamp: float, camera_id: int, points_2d: Points2D):
+        self.timestamp = timestamp
+        self.camera_id = camera_id
+        self.points_2d = points_2d
+
+    def get_timestamp(self) -> float:
+        return self.timestamp
+
+    def get_camera_id(self) -> int:
+        return self.camera_id
+
+    def get_points_2d(self) -> Points2D:
+        return self.points_2d
+
 
 class FeatureObservation:
     """A feature observation in an image."""
