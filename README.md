@@ -13,11 +13,11 @@ It is a simple playground to experiment and implement visual inertial odometry a
 
 ## Current status:
 
-**To Do:**
+**Implementation:**
 - [X] Feature tracking simulator
 - [X] Simple feature tracking module based on ORB features and KLT tracking
 - [X] Simple visual odometry with epipolar geometry
-- [ ] Non-Linear bundle adjustment
+- [X] Non-Linear bundle adjustment with Jacobian sparsity
 - [ ] MSCKF
 - [ ] On-Manifold Preintegration for Real-Time Visual-Inertial Odometry
 
