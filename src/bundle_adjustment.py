@@ -2,6 +2,7 @@ from typing import List, Tuple
 
 import numpy as np
 from scipy.optimize import least_squares
+from scipy.sparse import lil_matrix
 
 from .camera import PinHoleCamera
 from .camera_pose import CameraPose
@@ -46,7 +47,7 @@ class BundleAdjustment:
 
         # Extract poses and landmarks from params
         residuals = []
-        for pose_idx, image_features in enumerate[ImageFeatures](observations):
+        for pose_idx, image_features in enumerate(observations):
             if pose_idx == 0:
                 camera_pose = camera_pose_initial
             else:
@@ -84,6 +85,73 @@ class BundleAdjustment:
 
         result: np.ndarray = np.array(residuals).flatten()
         return result
+
+    @staticmethod
+    def bundle_adjustment_sparsity(
+        num_poses: int, num_landmarks: int, observations: List[ImageFeatures]
+    ) -> lil_matrix:
+        """
+        Calculate the sparsity pattern for the bundle adjustment problem.
+        It assumes state = [poses_flat, landmarks_flat] with poses_flat = [pose_0, ..., pose_n]
+        (pose_i = 3 position + 4 quaternion) and landmarks_flat = [landmark_0, ..., landmark_m]
+        (landmark_i = [x, y, z] 3D position).
+
+        Args:
+            num_poses (int): Number of poses to optimize.
+            num_landmarks (int): Number of landmarks.
+            observations (List[ImageFeatures]): List of observations for each camera pose.
+
+        Returns:
+            scipy.sparse.lil_matrix: Sparsity pattern for the bundle adjustment problem.
+        """
+        # Count total number of observations (features)
+        total_observations = sum(
+            len(obs.get_points_2d().get_points_2d()) for obs in observations
+        )
+
+        # Parameters: num_poses * 7 (3 pos + 4 quat) + num_landmarks * 3
+        m = total_observations * 2  # 2 residuals per observation (u, v)
+        n = num_poses * 7 + num_landmarks * 3
+        A = lil_matrix((m, n), dtype=int)
+
+        # Build landmark ID to index mapping
+        landmark_id_to_idx = {}
+        all_landmark_ids: set[int] = set()
+        for obs in observations:
+            all_landmark_ids.update(obs.get_points_2d().get_ids())
+        for idx, landmark_id in enumerate(sorted(all_landmark_ids)):
+            landmark_id_to_idx[landmark_id] = idx
+
+        # Fill sparsity pattern
+        residual_idx = 0
+        for pose_idx, image_features in enumerate(observations):
+            observed_ids = image_features.get_points_2d().get_ids()
+            observed_points = image_features.get_points_2d().get_points_2d()
+
+            for feature_idx in range(len(observed_points)):
+                landmark_id = observed_ids[feature_idx]
+                landmark_param_idx = landmark_id_to_idx[landmark_id]
+
+                # Each observation creates 2 residuals (u, v)
+                # Residuals depend on the camera pose and the landmark
+                for residual_offset in range(2):  # u and v residuals
+                    current_residual_idx = residual_idx + residual_offset
+
+                    # Camera pose parameters (7 parameters: 3 position + 4 quaternion)
+                    if pose_idx > 0:  # First pose (pose_idx=0) is fixed, not optimized
+                        pose_param_start = (pose_idx - 1) * 7
+                        for param_offset in range(7):
+                            A[current_residual_idx, pose_param_start + param_offset] = 1
+
+                    # Landmark parameters (3 parameters: x, y, z)
+                    landmark_param_start = num_poses * 7 + landmark_param_idx * 3
+                    for param_offset in range(3):
+                        A[current_residual_idx, landmark_param_start + param_offset] = 1
+
+                residual_idx += 2
+
+        print(A.toarray())
+        return A
 
     def optimize(
         self,
@@ -125,11 +193,17 @@ class BundleAdjustment:
         # Initial parameters: [poses_flat, landmarks_flat]
         initial_params = np.concatenate([pose_params, landmark_params])
 
+        jacobian_sparsity = self.bundle_adjustment_sparsity(
+            n_poses, len(landmark_ids), image_features_list
+        )
+
         # Perform optimization
         result = least_squares(
             self.residual_function,
             initial_params,
-            method="lm",  # Levenberg-Marquardt
+            jac_sparsity=jacobian_sparsity,
+            method="trf",
+            x_scale="jac",
             ftol=1e-6,
             xtol=1e-6,
             gtol=1e-6,
@@ -171,7 +245,7 @@ class BundleAdjustment:
 
         # Reproject to create optimized image features
         optimized_image_features = []
-        for pose_idx, image_features in enumerate[ImageFeatures](image_features_list):
+        for pose_idx, image_features in enumerate(image_features_list):
             timestamp = image_features.get_timestamp()
             camera_id = image_features.get_camera_id()
             pose = optimized_camera_poses[pose_idx]

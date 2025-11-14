@@ -7,30 +7,31 @@ from .camera import PinHoleCamera
 from .camera_pose import CameraPose
 from .feature_observation import ImageFeatures, Landmarks3D
 from .geometry import GeometryUtils
+from .landmarks import LandmarkGenerator
 from .matplotlib_visualizer import MatplotVisualizer
 
 
 def run_bundle_adjustment() -> None:
     # Landmarks:
-    landmarks: np.ndarray = np.array(
-        [
-            [3.0, 0.5, 0.1],
-            [3.0, 0.4, 0.2],
-            [3.0, -0.3, 0.4],
-            [3.0, 0.3, 0.4],
-            [3.0, 0.1, 0.0],
-            [3.0, -0.2, -0.25],
-            [3.0, -0.4, -0.5],
-            [3.0, 0.5, -0.2],
-        ]
-    )
+    # landmarks: np.ndarray = np.array(
+    #     [
+    #         [3.0, 0.5, 0.1],
+    #         [3.0, 0.4, 0.2],
+    #         [3.0, -0.3, 0.4],
+    #         [3.0, 0.3, 0.4],
+    #         [3.0, 0.1, 0.0],
+    #         [3.0, -0.2, -0.25],
+    #         [3.0, -0.4, -0.5],
+    #         [3.0, 0.5, -0.2],
+    #     ]
+    # )
 
-    # landmarks_generator: LandmarkGenerator = LandmarkGenerator(
-    #     (1.8, 2.4), (-0.5, 0.5), (-0.5, 0.5)
-    # )
-    # landmarks: np.ndarray = landmarks_generator.generate_random(
-    #     num_landmarks=100, seed=42
-    # )
+    landmarks_generator: LandmarkGenerator = LandmarkGenerator(
+        (2.8, 3.2), (-0.5, 0.5), (-0.5, 0.5)
+    )
+    landmarks: np.ndarray = landmarks_generator.generate_random(
+        num_landmarks=100, seed=42
+    )
 
     # Camera poses:
     quat_cam = GeometryUtils.quaternion_from_euler_angles(
@@ -185,10 +186,6 @@ def run_bundle_adjustment() -> None:
 
     print("Original landmarks:")
     print(landmarks)
-    # print("Noisy initial landmarks:")
-    # print(landmarks_noisy)
-    # print("Optimized landmarks:")
-    # print(optimized_points3d.get_points_3d())
 
     # Calculate errors
     landmark_error = np.linalg.norm(
