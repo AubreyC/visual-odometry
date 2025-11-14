@@ -454,9 +454,9 @@ class VisualOdometry:
 
             points_3d, reprojection_error = VisualOdometry.triangulate_points(
                 pose_1.rotation_matrix.transpose(),
-                pose_1.position.reshape(3, 1),
+                pose_1.position,
                 pose_2.rotation_matrix.transpose(),
-                pose_2.position.reshape(3, 1),
+                pose_2.position,
                 camera_matrix,
                 pts2d_1_selected,
                 pts2d_2_selected,
@@ -549,8 +549,8 @@ class VisualOdometry:
         t1 = -rot_F1_F @ originF1_F
         t2 = -rot_F2_F @ originF2_F
 
-        P1 = camera_matrix @ np.hstack((R1, t1))
-        P2 = camera_matrix @ np.hstack((R2, t2))
+        P1 = camera_matrix @ np.hstack((R1, t1.reshape(3, 1)))
+        P2 = camera_matrix @ np.hstack((R2, t2.reshape(3, 1)))
         pts4D = cv2.triangulatePoints(P1, P2, pts1.T, pts2.T)
         pts4D /= pts4D[3]  # convert from homogeneous to 3D
         result: np.ndarray = pts4D[:3].T

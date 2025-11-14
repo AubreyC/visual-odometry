@@ -119,9 +119,9 @@ class TestTriangulation:
 
         points_3d, reprojection_error = VisualOdometry.triangulate_points(
             pose_0.rotation_matrix.transpose(),
-            pose_0.position.reshape(3, 1),
+            pose_0.position,
             pose_1.rotation_matrix.transpose(),
-            pose_1.position.reshape(3, 1),
+            pose_1.position,
             camera.get_camera_matrix(),
             features_selected_0,
             features_selected_1,

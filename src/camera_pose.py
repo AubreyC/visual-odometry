@@ -20,6 +20,7 @@ class CameraPose:
             orientation (np.ndarray): Orientation as quaternion [w, x, y, z].
             timestamp (Optional[float]): Timestamp for this pose. Defaults to None.
         """
+
         # Validate position
         ValidationHelper.validate_pt3d(position)
         self.position = position.copy()
@@ -179,6 +180,9 @@ class CameraPose:
 
         # Direction vector from camera to target
         direction = target_position - camera_position
+
+        print("direction.shape: ", direction.shape)
+
         direction = GeometryUtils.normalize_vector(direction)
 
         # Camera Z-axis points toward target (in camera coordinates, +Z is forward)

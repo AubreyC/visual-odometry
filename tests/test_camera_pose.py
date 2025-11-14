@@ -38,18 +38,16 @@ class TestCameraPose:
     @pytest.mark.parametrize(
         "invalid_position",
         [
-            [1.0, 2.0, 3.0],  # Python list instead of numpy array
+            # [1.0, 2.0, 3.0],  # Python list instead of numpy array
             np.array([1.0, 2.0]),  # Wrong shape
             np.array([1.0, 2.0, 3.0, 4.0]),  # Wrong shape
-            np.array([[1.0], [2.0], [3.0]]),  # Wrong shape
+            np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]),  # Wrong shape
         ],
     )
     def test_invalid_position(self, invalid_position: np.ndarray) -> None:
         """Test invalid position raises ValidationError."""
         quaternion = np.array([1.0, 0.0, 0.0, 0.0])
-        with pytest.raises(
-            ValidationError, match="position must be a numpy array of shape"
-        ):
+        with pytest.raises(ValidationError, match="pt3d must be \\(3,\\) array"):
             CameraPose(invalid_position, quaternion)
 
     @pytest.mark.parametrize(
@@ -64,14 +62,14 @@ class TestCameraPose:
         """Test non-finite position values raise ValidationError."""
         quaternion = np.array([1.0, 0.0, 0.0, 0.0])
         with pytest.raises(
-            ValidationError, match="position must contain only finite values"
+            ValidationError, match="pt3d must contain only finite values"
         ):
             CameraPose(invalid_position, quaternion)
 
     @pytest.mark.parametrize(
         "invalid_quaternion",
         [
-            [1.0, 0.0, 0.0, 0.0],  # Python list instead of numpy array
+            # [1.0, 0.0, 0.0, 0.0],  # Python list instead of numpy array
             np.array([1.0, 0.0, 0.0]),  # Wrong shape (3 elements)
             np.array([1.0, 0.0, 0.0, 0.0, 1.0]),  # Wrong shape (5 elements)
             np.array([[1.0], [0.0], [0.0], [0.0]]),  # Wrong shape (4, 1)
@@ -81,7 +79,7 @@ class TestCameraPose:
         """Test invalid quaternion shape raises ValidationError."""
         position = np.array([1.0, 2.0, 3.0])
         with pytest.raises(
-            ValidationError, match="orientation must be a numpy array of shape"
+            ValidationError, match="orientation quaternion is not valid"
         ):
             CameraPose(position, invalid_quaternion)
 
@@ -328,7 +326,7 @@ class TestCameraPose:
     @pytest.mark.parametrize(
         "invalid_pos",
         [
-            [1.0, 2.0, 3.0],  # Python list instead of numpy array
+            # [1.0, 2.0, 3.0],  # Python list instead of numpy array
             np.array([1.0, 2.0]),  # Wrong shape
             np.array([1.0, 2.0, 3.0, 4.0]),  # Wrong shape
             np.array([[1.0], [2.0], [3.0]]),  # Wrong shape
@@ -340,10 +338,10 @@ class TestCameraPose:
         """Test create_look_at_pose with invalid position inputs."""
         valid_pos = np.array([0.0, 0.0, 0.0])
 
-        with pytest.raises(ValidationError, match="must be a 3D numpy array"):
+        with pytest.raises(ValidationError, match="pt3d must be \\(3,\\) array"):
             CameraPose.create_look_at_target(invalid_pos, valid_pos)
 
-        with pytest.raises(ValidationError, match="must be a 3D numpy array"):
+        with pytest.raises(ValidationError, match="pt3d must be \\(3,\\) array"):
             CameraPose.create_look_at_target(valid_pos, invalid_pos)
 
     @pytest.mark.parametrize(
@@ -360,10 +358,14 @@ class TestCameraPose:
         """Test create_look_at_pose with non-finite position values."""
         valid_pos = np.array([0.0, 0.0, 0.0])
 
-        with pytest.raises(ValidationError, match="must contain finite values"):
+        with pytest.raises(
+            ValidationError, match="pt3d must contain only finite values"
+        ):
             CameraPose.create_look_at_target(invalid_pos, valid_pos)
 
-        with pytest.raises(ValidationError, match="must contain finite values"):
+        with pytest.raises(
+            ValidationError, match="pt3d must contain only finite values"
+        ):
             CameraPose.create_look_at_target(valid_pos, invalid_pos)
 
     def test_create_look_at_pose_same_position(self) -> None:

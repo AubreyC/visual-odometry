@@ -481,3 +481,64 @@ class ImageObservations:
             List[FeatureObservation]: List of feature observations.
         """
         return self.feature_observations
+
+    def to_opencv_image(
+        self,
+        background_color: Tuple[int, int, int] = (255, 255, 255),
+        feature_color: Tuple[int, int, int] = (0, 0, 255),
+        feature_radius: int = 3,
+        thickness: int = -1,
+        show_landmark_ids: bool = True,
+        text_color: Tuple[int, int, int] = (255, 0, 0),
+        font_scale: float = 0.5,
+        font_thickness: int = 1,
+    ) -> Any:
+        """Generate an OpenCV image from the ImageFeatures.
+
+        Args:
+            background_color (Tuple[int, int, int]): RGB color for background (0-255).
+            feature_color (Tuple[int, int, int]): RGB color for feature points (0-255).
+            feature_radius (int): Radius of feature point circles.
+            thickness (int): Thickness of feature point circles (-1 for filled).
+            show_landmark_ids (bool): Whether to display landmark IDs as text.
+            text_color (Tuple[int, int, int]): RGB color for landmark ID text (0-255).
+            font_scale (float): Font scale for landmark ID text.
+            font_thickness (int): Thickness for landmark ID text.
+
+        Returns:
+            np.ndarray: OpenCV image as numpy array with shape (height, width, 3) and dtype uint8.
+        """
+        # Create blank image
+        image = np.full(
+            (self.image_height, self.image_width, 3), background_color, dtype=np.uint8
+        )
+
+        # Draw feature points
+        for observation in self.feature_observations:
+            # Convert image coordinates to integer pixels
+            u, v = observation.image_coords
+            center = (int(round(u)), int(round(v)))
+
+            # Draw feature point
+            cv2.circle(image, center, feature_radius, feature_color, thickness)
+
+            # Draw landmark ID if requested
+            if show_landmark_ids:
+                text = str(observation.landmark_id)
+                # Position text slightly above and to the right of the point
+                text_pos = (
+                    center[0] + feature_radius + 2,
+                    center[1] - feature_radius - 2,
+                )
+                cv2.putText(
+                    image,
+                    text,
+                    text_pos,
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale,
+                    text_color,
+                    font_thickness,
+                    cv2.LINE_AA,
+                )
+
+        return image

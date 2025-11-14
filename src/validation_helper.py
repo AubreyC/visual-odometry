@@ -34,7 +34,10 @@ class ValidationHelper:
             ValidationError: If pt_3d are invalid.
         """
 
-        if not isinstance(pt3d, np.ndarray) or pt3d.shape != (3,):
+        if not isinstance(pt3d, np.ndarray):
+            raise ValidationError(f"pt3d must be a numpy array, got {type(pt3d)}")
+
+        if pt3d.shape != (3,):
             raise ValidationError(f"pt3d must be (3,) array, got shape {pt3d.shape}")
 
         if not np.all(np.isfinite(pt3d)):
@@ -51,7 +54,10 @@ class ValidationHelper:
             ValidationError: If pt2d are invalid.
         """
 
-        if not isinstance(pt2d, np.ndarray) or pt2d.shape != (2,):
+        if not isinstance(pt2d, np.ndarray):
+            raise ValidationError(f"pt2d must be a numpy array, got {type(pt2d)}")
+
+        if pt2d.shape != (2,):
             raise ValidationError(f"pt2d must be (2,) array, got shape {pt2d.shape}")
 
         if not np.all(np.isfinite(pt2d)):
