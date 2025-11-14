@@ -281,7 +281,7 @@ class TestCameraPose:
         target_pos = np.array([1.0, 0.0, 0.0])
         timestamp = 1.5
 
-        pose = CameraPose.create_look_at_pose(camera_pos, target_pos, timestamp)
+        pose = CameraPose.create_look_at_target(camera_pos, target_pos, timestamp)
 
         assert np.allclose(pose.position, camera_pos)
         assert pose.timestamp == timestamp
@@ -312,7 +312,7 @@ class TestCameraPose:
         camera_pos = np.array([0.0, 0.0, 0.0])
         target_pos = np.array([1.0, 1.0, 1.0])
 
-        pose = CameraPose.create_look_at_pose(camera_pos, target_pos)
+        pose = CameraPose.create_look_at_target(camera_pos, target_pos)
 
         # Camera Z should point toward normalized target direction
         expected_direction = np.array([1.0, 1.0, 1.0]) / np.linalg.norm([1.0, 1.0, 1.0])
@@ -341,10 +341,10 @@ class TestCameraPose:
         valid_pos = np.array([0.0, 0.0, 0.0])
 
         with pytest.raises(ValidationError, match="must be a 3D numpy array"):
-            CameraPose.create_look_at_pose(invalid_pos, valid_pos)
+            CameraPose.create_look_at_target(invalid_pos, valid_pos)
 
         with pytest.raises(ValidationError, match="must be a 3D numpy array"):
-            CameraPose.create_look_at_pose(valid_pos, invalid_pos)
+            CameraPose.create_look_at_target(valid_pos, invalid_pos)
 
     @pytest.mark.parametrize(
         "invalid_pos",
@@ -361,10 +361,10 @@ class TestCameraPose:
         valid_pos = np.array([0.0, 0.0, 0.0])
 
         with pytest.raises(ValidationError, match="must contain finite values"):
-            CameraPose.create_look_at_pose(invalid_pos, valid_pos)
+            CameraPose.create_look_at_target(invalid_pos, valid_pos)
 
         with pytest.raises(ValidationError, match="must contain finite values"):
-            CameraPose.create_look_at_pose(valid_pos, invalid_pos)
+            CameraPose.create_look_at_target(valid_pos, invalid_pos)
 
     def test_create_look_at_pose_same_position(self) -> None:
         """Test create_look_at_pose with same camera and target positions."""
@@ -374,7 +374,7 @@ class TestCameraPose:
             ValidationError,
             match="Camera position and target position cannot be the same",
         ):
-            CameraPose.create_look_at_pose(position, position)
+            CameraPose.create_look_at_target(position, position)
 
 
 class TestTrajectoryGenerator:

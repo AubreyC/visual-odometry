@@ -4,6 +4,7 @@ import numpy as np
 
 from .geometry import GeometryUtils
 from .validation_error import ValidationError
+from .validation_helper import ValidationHelper
 
 
 class CameraPose:
@@ -20,26 +21,37 @@ class CameraPose:
             timestamp (Optional[float]): Timestamp for this pose. Defaults to None.
         """
         # Validate position
-        if not isinstance(position, np.ndarray) or position.shape != (3,):
-            raise ValidationError(
-                f"position must be a numpy array of shape (3,), got {position.shape if isinstance(position, np.ndarray) else type(position)}"
-            )
-        if not np.all(np.isfinite(position)):
-            raise ValidationError("position must contain only finite values")
-
+        ValidationHelper.validate_pt3d(position)
         self.position = position.copy()
 
         # Validate orientation (quaternion only)
-        if not isinstance(orientation, np.ndarray) or orientation.shape != (4,):
-            raise ValidationError(
-                f"orientation must be a numpy array of shape (4,) for quaternion [w, x, y, z], got {orientation.shape if isinstance(orientation, np.ndarray) else type(orientation)}"
-            )
-
         if not GeometryUtils.validate_quaternion(orientation):
             raise ValidationError("orientation quaternion is not valid")
 
         self.orientation_quaternion = orientation.copy()
         self.timestamp = timestamp
+
+    def convert_to_new_frame(self, camera_pose: "CameraPose") -> "CameraPose":
+        """Convert the camera pose to a new frame defined by a new camera pose.
+
+        Args:
+            camera_pose (CameraPose): The new camera pose defining the new frame.
+
+        Returns:
+            CameraPose: The camera pose in the new frame.
+        """
+
+        # Convert position to new frame
+        position_new_frame = camera_pose.transform_points_world_to_camera(
+            self.position.reshape(1, 3)
+        ).reshape(3)
+
+        # Convert orientation to new frame
+        orientation_new_frame = GeometryUtils.quaternion_multiply(
+            GeometryUtils.quaternion_inverse(camera_pose.quaternion),
+            self.quaternion,
+        )
+        return CameraPose(position_new_frame, orientation_new_frame, self.timestamp)
 
     @property
     def rotation_matrix(self) -> np.ndarray:
@@ -64,12 +76,12 @@ class CameraPose:
         """
 
         # Validate input
-        # ValidationHelper.validate_pt3d(points_world)
+        ValidationHelper.validate_pts3d(points_world)
 
         # First translate, then rotate
         # Note: rotation_matrix is the rotation matrix from world to camera frame
         # so we R_CF_I (rotation frame matrix is the transpose of the rotation matrix)
-        points_relative = points_world - self.position
+        points_relative = points_world - self.position.reshape(1, 3)
         return points_relative @ self.rotation_matrix  # (p - t) * R
 
     def transform_points_camera_to_world(self, points_camera: np.ndarray) -> np.ndarray:
@@ -81,6 +93,10 @@ class CameraPose:
         Returns:
             np.ndarray: Points in world frame, shape (N, 3).
         """
+
+        # Validate input
+        ValidationHelper.validate_pts3d(points_camera)
+
         # First rotate, then translate
         return (self.rotation_matrix @ points_camera.T).T + self.position
 
@@ -131,7 +147,7 @@ class CameraPose:
         return cls(position, quaternion, timestamp)
 
     @staticmethod
-    def create_look_at_pose(
+    def create_look_at_target(
         camera_position: np.ndarray, target_position: np.ndarray, timestamp: float = 0.0
     ) -> "CameraPose":
         """Create a camera pose that points toward a target position.
@@ -150,17 +166,10 @@ class CameraPose:
         Raises:
             ValidationError: If inputs are invalid.
         """
-        # Validate inputs
-        for pos_name, pos in [
-            ("camera_position", camera_position),
-            ("target_position", target_position),
-        ]:
-            if not isinstance(pos, np.ndarray) or pos.shape != (3,):
-                raise ValidationError(
-                    f"{pos_name} must be a 3D numpy array, got {pos.shape if isinstance(pos, np.ndarray) else type(pos)}"
-                )
-            if not np.all(np.isfinite(pos)):
-                raise ValidationError(f"{pos_name} must contain finite values")
+
+        # Validate input
+        ValidationHelper.validate_pt3d(camera_position)
+        ValidationHelper.validate_pt3d(target_position)
 
         # Check if camera and target positions are the same
         if np.allclose(camera_position, target_position):

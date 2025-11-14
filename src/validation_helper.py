@@ -28,16 +28,31 @@ class ValidationHelper:
         """Validate single 3D point
 
         Args:
-            pt3d (np.ndarray): 3x1 array of 3D point
+            pt3d (np.ndarray): (3,) array of a 3D point coordinates
 
         Raises:
             ValidationError: If pt_3d are invalid.
         """
 
-        if (
-            not isinstance(pt3d, np.ndarray)
-            or pt3d.ndim != 2
-            or pt3d.shape[0] != 3
-            or pt3d.shape[1] != 1
-        ):
-            raise ValidationError(f"pts3d must be 3x1 array, got shape {pt3d.shape}")
+        if not isinstance(pt3d, np.ndarray) or pt3d.shape != (3,):
+            raise ValidationError(f"pt3d must be (3,) array, got shape {pt3d.shape}")
+
+        if not np.all(np.isfinite(pt3d)):
+            raise ValidationError("pt3d must contain only finite values")
+
+    @staticmethod
+    def validate_pt2d(pt2d: np.ndarray) -> None:
+        """Validate single 2D point
+
+        Args:
+            pt2d (np.ndarray): (2,) array of a 2D point coordinates
+
+        Raises:
+            ValidationError: If pt2d are invalid.
+        """
+
+        if not isinstance(pt2d, np.ndarray) or pt2d.shape != (2,):
+            raise ValidationError(f"pt2d must be (2,) array, got shape {pt2d.shape}")
+
+        if not np.all(np.isfinite(pt2d)):
+            raise ValidationError("pt2d must contain only finite values")

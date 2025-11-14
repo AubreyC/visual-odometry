@@ -90,7 +90,7 @@ def main() -> None:
     image_renderer: ImageRenderer = ImageRenderer(camera)
 
     # Scene visualizer camera pose:
-    scene_camera_pose = CameraPose.create_look_at_pose(
+    scene_camera_pose = CameraPose.create_look_at_target(
         camera_position=np.array([-15.0, -15.0, 8.0]),
         target_position=np.array([0.0, 0.0, 0.0]),
         timestamp=0.0,
