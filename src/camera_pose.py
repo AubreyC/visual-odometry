@@ -62,6 +62,10 @@ class CameraPose:
         Returns:
             np.ndarray: Points in camera frame, shape (N, 3).
         """
+
+        # Validate input
+        # ValidationHelper.validate_pt3d(points_world)
+
         # First translate, then rotate
         # Note: rotation_matrix is the rotation matrix from world to camera frame
         # so we R_CF_I (rotation frame matrix is the transpose of the rotation matrix)

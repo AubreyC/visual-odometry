@@ -5,9 +5,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
-from validation_helper import ValidationHelper
-
 from .camera import PinHoleCamera
+from .validation_helper import ValidationHelper
 
 
 class Points2D:
@@ -25,6 +24,12 @@ class Points2D:
     def get_ids(self) -> np.ndarray:
         return self.ids.copy()
 
+    def get_selected_ids(self, ids: np.ndarray) -> "Points2D":
+        common_ids, common_indices_1, common_indices_2 = np.intersect1d(
+            self.ids, ids, return_indices=True
+        )
+        return Points2D(self.points_2d[common_indices_1], common_ids)
+
 
 class Points3D:
     def __init__(self, points_3d: np.ndarray, ids: np.ndarray):
@@ -40,6 +45,12 @@ class Points3D:
 
     def get_ids(self) -> np.ndarray:
         return self.ids.copy()
+
+    def get_selected_ids(self, ids: np.ndarray) -> "Points3D":
+        common_ids, common_indices_1, common_indices_2 = np.intersect1d(
+            self.ids, ids, return_indices=True
+        )
+        return Points3D(self.points_3d[common_indices_1], common_ids)
 
 
 class ImageFeatures:

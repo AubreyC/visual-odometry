@@ -63,13 +63,40 @@ class PinHoleCamera:
 
         self.fx = fx
         self.fy = fy
-
         self.cx = cx
         self.cy = cy
-
         self.k1 = k1
         self.k2 = k2
         self.k3 = k3
+
+    @classmethod
+    def from_vector(self, vector: np.ndarray) -> "PinHoleCamera":
+        """Create a PinHoleCamera instance from a vector.
+
+        Args:
+            vector (np.ndarray): A vector of length 7 in the format [fx, fy, cx, cy, k1, k2, k3].
+
+        Returns:
+            PinHoleCamera: A new PinHoleCamera instance.
+        """
+
+        return PinHoleCamera(
+            fx=vector[0],
+            fy=vector[1],
+            cx=vector[2],
+            cy=vector[3],
+            k1=vector[4],
+            k2=vector[5],
+            k3=vector[6],
+        )
+
+    def to_vector(self) -> np.ndarray:
+        """Return vector representation of the camera.
+
+        Returns:
+            np.ndarray: [fx, fy, cx, cy, k1, k2, k3
+        """
+        return np.array([self.fx, self.fy, self.cx, self.cy, self.k1, self.k2, self.k3])
 
     def project(self, points_3d: np.ndarray) -> np.ndarray:
         """Project 3D points to the image plane.

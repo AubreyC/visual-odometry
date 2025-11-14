@@ -308,6 +308,7 @@ class MatplotVisualizer:
         self,
         landmarks: np.ndarray,
         poses: List[CameraPose],
+        landmarks_second: Optional[np.ndarray] = None,
         poses_second: Optional[List[CameraPose]] = None,
         show_orientation: bool = True,
         orientation_scale: float = 0.1,
@@ -348,6 +349,16 @@ class MatplotVisualizer:
             alpha=0.6,
             label="Landmarks",
         )
+
+        if landmarks_second is not None:
+            ax.scatter(
+                landmarks_second[:, 0],
+                landmarks_second[:, 1],
+                landmarks_second[:, 2],
+                c="green",
+                s=10,
+                alpha=0.6,
+            )
 
         # Show orientation arrows at regular intervals
         if show_orientation and len(poses) > 0:
