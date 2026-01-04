@@ -9,7 +9,13 @@ It is a simple playground to experiment and implement visual inertial odometry a
 - boilerplate to run algorithm on popular datasets (EuroC, etc)
 - implementation of some popular methodologies
 
+**EuroC dataset:**
+
 ![euroc](demos/euroc_mav0_demo.gif)
+
+**Simulator - Visual features:**
+
+<img src="demos/scene_simulation.png" alt="drawing" width="400"/>
 
 ## Current status:
 
